@@ -1,0 +1,99 @@
+/* -*- Mode: c; c-basic-offset: 2 -*-
+ *
+ * nblex.h - Non blocking lexer interfaces and definition
+ *
+ * Copyright (C) 2013, David Beckett http://www.dajobe.org/
+ * 
+ * This package is Free Software
+ * 
+ * It is licensed under the following three licenses as alternatives:
+ *   1. GNU Lesser General Public License (LGPL) V2.1 or any newer version
+ *   2. GNU General Public License (GPL) V2 or any newer version
+ *   3. Apache License, V2.0 or any newer version
+ * 
+ * You may not use this file except in compliance with at least one of
+ * the above three licenses.
+ * 
+ * See LICENSE.html or LICENSE.txt at the top of this package for the
+ * complete terms and further detail along with the license texts for
+ * the licenses in COPYING.LIB, COPYING and LICENSE-2.0.txt respectively.
+ * 
+ */
+
+
+
+#ifndef NBLEX_H
+#define NBLEX_H
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+/**
+ * NBLEX_VERSION_STRING:
+ *
+ * Nblex library version string
+ */
+#define NBLEX_VERSION_STRING "@VERSION@"
+
+
+/**
+ * NBLEX_API:
+ *
+ * Macro for wrapping API function call declarations.
+ *
+ */
+#ifndef NBLEX_API
+#  ifdef WIN32
+#    ifdef __GNUC__
+#      undef _declspec
+#      define _declspec(x) __declspec(x)
+#    endif
+#    ifdef NBLEX_STATIC
+#      define NBLEX_API
+#    else
+#      ifdef NBLEX_INTERNAL
+#        define NBLEX_API _declspec(dllexport)
+#      else
+#        define NBLEX_API _declspec(dllimport)
+#      endif
+#    endif
+#  else
+#    define NBLEX_API
+#  endif
+#endif
+
+/* Use gcc 3.1+ feature to allow marking of deprecated API calls.
+ * This gives a warning during compiling.
+ */
+#if ( __GNUC__ == 3 && __GNUC_MINOR__ > 0 ) || __GNUC__ > 3
+#define NBLEX_DEPRECATED __attribute__((deprecated))
+#else
+#define NBLEX_DEPRECATED
+#endif
+
+
+
+/* Public structures */
+
+/**
+ * nblex_world:
+ *
+ * Main nblex class.
+ */
+typedef struct nblex_world_s nblex_world;
+
+
+/* Library initialisation */
+NBLEX_API nblex_world* nblex_new_world(void);
+NBLEX_API int nblex_world_open(nblex_world *world);
+NBLEX_API void nblex_free_world(nblex_world* world);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
