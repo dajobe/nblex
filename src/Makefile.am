@@ -1,6 +1,6 @@
 lib_LTLIBRARIES = libnblex.la
 
-AM_CFLAGS= -DRASQAL_INTERNAL=1
+AM_CFLAGS= -DNBLEX_INTERNAL=1
 
 nodist_pkginclude_HEADERS = nblex.h
 noinst_HEADERS = nblex_internal.h
