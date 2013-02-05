@@ -47,8 +47,6 @@ extern "C" {
 #define NBLEX_NORETURN
 #endif
 
-#endif
-
 /* Can be over-ridden or undefined in a config.h file or -Ddefine */
 #ifndef NBLEX_INLINE
 #define NBLEX_INLINE inline
@@ -66,6 +64,16 @@ struct nblex_world_s {
 
 };
 
+
+/* Safe casts: widening a value */
+#define NBLEX_GOOD_CAST(t, v) (t)(v)
+
+/* Unsafe casts: narrowing a value */
+#define NBLEX_BAD_CAST(t, v) (t)(v)
+
+
+/* end of NBLEX_INTERNAL */
+#endif
 
 
 #ifdef __cplusplus

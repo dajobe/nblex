@@ -86,6 +86,14 @@ extern "C" {
 typedef struct nblex_world_s nblex_world;
 
 
+/**
+ * nblex_unichar:
+ *
+ * Unicode character
+ */
+typedef uint16_t nblex_unichar;
+
+
 /* Library initialisation */
 NBLEX_API nblex_world* nblex_new_world(void);
 NBLEX_API int nblex_world_open(nblex_world *world);
