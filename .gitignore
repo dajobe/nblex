@@ -28,3 +28,4 @@ libtool
 mkinstalldirs
 nblex*bz2
 nblex*gz
+setup.sh
