@@ -65,6 +65,9 @@ struct nblex_world_s {
   /* non-0 if lexing has started */
   int started;
 
+  /* non-0 if data input has ended */
+  int ended;
+
   /* Bytes byffer - bytes provided so far that have not yet formed a Unicode
    * Unicode codepoint.  This is always fixed at capacity 4 but can vary
    * in number of bytes stored, in @bytes_size.

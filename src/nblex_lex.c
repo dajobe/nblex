@@ -64,6 +64,7 @@ nblex_start(nblex_world* world)
     return 1;
 
   world->started = 1;
+  world->ended = 0;
 
   return 0;
 }
@@ -90,9 +91,12 @@ nblex_finish(nblex_world* world)
 
   if(world->bytes_size)
     rc = nblex_add_bytes(world, NULL, 0);
-
-  if(!rc && world->codepoints_size)
+  else if(world->codepoints_size)
     rc = nblex_add_codepoints(world, NULL, 0);
+  else if (!world->ended) {
+    rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_END_OF_INPUT);
+    world->ended = 1;
+  }
 
   world->started = 0;
 
@@ -118,6 +122,9 @@ int
 nblex_add_byte(nblex_world* world, const unsigned char b) 
 {
   unsigned char buffer[1]; /* static */
+
+  if(!world || world->ended)
+    return 1;
 
   buffer[0] = b;
   return nblex_add_bytes(world, buffer, (size_t)1);
@@ -148,7 +155,7 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
   int rc;
   size_t bytes_offset = world->bytes_size /* 0 .. 3 */ ;
   
-  if(!world)
+  if(!world || world->ended)
     return 1;
 
   if(!buffer || !len) {
@@ -165,6 +172,9 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
       rc = nblex_add_codepoint(world, output);
       bytes_offset = 0;
     }
+    if(!rc)
+      rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_END_OF_INPUT);
+    world->ended = 1;
   } else {
     /* process input data */
     size_t offset = 0; /* 0 .. len-1 */
@@ -248,7 +258,7 @@ nblex_print_codepoint(FILE* stream, const nblex_unichar codepoint)
 int
 nblex_add_codepoint(nblex_world* world, const nblex_unichar codepoint)
 {
-  if(!world)
+  if(!world || world->ended)
     return 1;
 
   fputs("nblex_add_codepoint(", stderr);
@@ -284,7 +294,7 @@ nblex_add_codepoints(nblex_world* world, const nblex_unichar* codepoints,
   size_t offset;
   int rc = 0;
   
-  if(!world)
+  if(!world || world->ended)
     return 1;
 
   for(offset = 0; offset < len; offset++) {
@@ -293,8 +303,11 @@ nblex_add_codepoints(nblex_world* world, const nblex_unichar* codepoints,
       break;
   }
 
-  if(!rc && is_end)
-    rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_END_OF_INPUT);
+  if(is_end) {
+    if(!rc)
+      rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_END_OF_INPUT);
+    world->ended = 1;
+  }
 
   return rc;
 }
