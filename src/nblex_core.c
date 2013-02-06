@@ -76,10 +76,8 @@ nblex_new_world(void)
 int
 nblex_world_open(nblex_world *world)
 {
-  int rc;
-
   if(!world)
-    return -1;
+    return 1;
 
   if(world->opened++)
     return 0; /* not an error */
