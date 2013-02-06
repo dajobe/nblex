@@ -9,6 +9,8 @@ AC_CONFIG_AUX_DIR(build)
 AC_CONFIG_MACRO_DIR(build)
 AM_INIT_AUTOMAKE([1.11 check-news std-options -Wobsolete -Wportability -Wsyntax -Wunsupported -Wextra-portability])
 
+AM_MAINTAINER_MODE
+
 NBLEX_LIBTOOL_VERSION=0:0:0
 AC_SUBST(NBLEX_LIBTOOL_VERSION)
 
@@ -35,6 +37,96 @@ LT_INIT
 AC_CHECK_HEADERS([string.h stdlib.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
+AC_DEFUN([NBLEX_CC_TRY_FLAG], [
+  AC_MSG_CHECKING([whether $CC supports $1])
+  nblex_save_CFLAGS="$CFLAGS"
+  CFLAGS="$CFLAGS $1"
+  AC_COMPILE_IFELSE([AC_LANG_SOURCE([ ])], [nblex_cc_flag=yes], [nblex_cc_flag=no])
+  CFLAGS="$nblex_save_CFLAGS"
+  if test "X$nblex_cc_flag" = "Xyes"; then
+    ifelse([$2], , :, [$2])
+  else
+    ifelse([$3], , :, [$3])
+  fi
+  AC_MSG_RESULT($nblex_cc_flag)
+])
+
+# GCC warning options
+# http://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html
+#
+# Too noisy:
+#  -Wconversion
+#  -Wformat-nonliteral : variables for format strings
+#  -Wmissing-field-initializers : too noisy in raptor_rss_common.c
+#  -Wsystem-headers   : not debugging system
+#  -Wsign-conversion: : many int / unsigned int / size_t
+#  -Wunused-parameter : variables can be marked  __attribute__('unused')
+#
+# Apple gcc specific (probably): -Wshorten-64-to-32
+possible_warnings="\
+-Wall \
+-Wc++-compat \
+-Wextra \
+-Wunused \
+\
+-Waggregate-return \
+-Wbad-function-cast \
+-Wcast-align \
+-Wdeclaration-after-statement \
+-Wdisabled-optimization \
+-Wdiv-by-zero \
+-Wendif-labels \
+-Werror-implicit-function-declaration \
+-Wfloat-equal \
+-Wformat-security \
+-Wframe-larger-than=4096 \
+-Winit-self \
+-Winline \
+-Wmissing-declarations \
+-Wmissing-format-attribute \
+-Wmissing-noreturn \
+-Wmissing-prototypes \
+-Wnested-externs \
+-Wold-style-definition \
+-Wpacked \
+-Wpointer-arith \
+-Wredundant-decls \
+-Wshadow \
+-Wsign-compare \
+-Wstrict-prototypes \
+-Wswitch-enum \
+-Wundef \
+-Wunsafe-loop-optimizations \
+-Wwrite-strings \
+\
+-Wshorten-64-to-32
+\
+-Wno-conversion \
+-Wno-format-nonliteral \
+-Wno-missing-field-initializers \
+-Wno-sign-conversion \
+-Wno-system-headers \
+-Wno-unused-parameter \
+"
+
+warning_cflags=
+if test "$USE_MAINTAINER_MODE" = yes; then
+  AC_MSG_CHECKING(for supported $CC warning flags)
+  AC_MSG_RESULT($warning_cflags)
+  for warning in $possible_warnings; do
+    NBLEX_CC_TRY_FLAG([$warning], [warning_cflags="$warning_cflags $warning"])
+  done
+  AC_MSG_CHECKING($CC supports warning flags)
+  AC_MSG_RESULT($warning_cflags)
+fi
+
+MAINTAINER_CPPFLAGS="$warning_cflags"
+
+
+if test "$USE_MAINTAINER_MODE" = yes; then
+  AC_DEFINE([MAINTAINER_MODE], [1], [Define to 1 if maintainer mode is enabled.])
+  CPPFLAGS="$MAINTAINER_CPPFLAGS $CPPFLAGS"
+fi
 
 # Checks for library functions.
 
