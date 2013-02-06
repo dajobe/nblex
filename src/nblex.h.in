@@ -91,7 +91,26 @@ typedef struct nblex_world_s nblex_world;
  *
  * Unicode character
  */
-typedef uint16_t nblex_unichar;
+typedef unsigned long nblex_unichar;
+
+/* Unicode defines only the range U+0000 to U+10FFFF */
+#define NBLEX_UNICODE_MAX_CODEPOINT 0x10FFFF
+
+/* Sentinal values of nblex_unichar: */
+
+/**
+ * NBLEX_CODEPOINT_INVALID:
+ *
+ * An invalid Unicode byte sequence was seen
+ */
+#define NBLEX_CODEPOINT_INVALID      0xF0000DL
+
+/**
+ * NBLEX_CODEPOINT_END_OF_INPUT:
+ *
+ * End of input byte sequence was seen
+ */
+#define NBLEX_CODEPOINT_END_OF_INPUT 0xFFFFFFL
 
 
 /* Library initialisation */
