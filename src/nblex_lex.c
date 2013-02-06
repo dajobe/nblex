@@ -152,16 +152,18 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
     return 1;
 
   if(!buffer || !len) {
-    nblex_unichar output;
+    if(bytes_offset) {
+      nblex_unichar output;
 
-    /* It's the end of the input */
-    rc = nblex_unicode_utf8_string_get_char(world->bytes, bytes_offset,
-                                            &output);
-    if(rc < 1)
-      /* any error in remaining data */
-      output = NBLEX_CODEPOINT_INVALID;
-    rc = nblex_add_codepoint(world, output);
-    bytes_offset = 0;
+      /* It's the end of the input */
+      rc = nblex_unicode_utf8_string_get_char(world->bytes, bytes_offset,
+                                              &output);
+      if(rc < 1)
+        /* any error in remaining data */
+        output = NBLEX_CODEPOINT_INVALID;
+      rc = nblex_add_codepoint(world, output);
+      bytes_offset = 0;
+    }
   } else {
     /* process input data */
     size_t offset = 0; /* 0 .. len-1 */
