@@ -225,6 +225,8 @@ nblex_print_codepoint(FILE* stream, const nblex_unichar codepoint)
             NBLEX_GOOD_CAST(unsigned int, (codepoint & 0x10ffff)));
   else if(codepoint == NBLEX_CODEPOINT_INVALID) 
     fputs("INVALID_UNICODEPOINT", stream);
+  else if(codepoint == NBLEX_CODEPOINT_END_OF_INPUT)
+    fputs("END_OF_INPUT", stream);
   else
     fputs("UNKNOWN", stream);
 }
