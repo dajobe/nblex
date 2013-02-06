@@ -161,6 +161,7 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
       if(rc < 1)
         /* any error in remaining data */
         output = NBLEX_CODEPOINT_INVALID;
+
       rc = nblex_add_codepoint(world, output);
       bytes_offset = 0;
     }
@@ -186,10 +187,12 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
         } else if(rc == 3) {
           world->bytes[0] = world->bytes[3];
         }
+
         bytes_offset = 0;
         rc = nblex_add_codepoint(world, output);
         if(rc)
           break;
+
       } else {
         /* some kind of short data or bad data error */
         if(bytes_offset == 4) {
@@ -199,6 +202,7 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
           rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_INVALID);
           if(rc)
             break;
+
           bytes_offset = 0;
         } else {
           /* bytes_offset is 1-3 so add more bytes from input */
