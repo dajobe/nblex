@@ -38,9 +38,6 @@
 #include "nblex_internal.h"
 
 
-/* Unicode defines only the range U+0000 to U+10FFFF */
-const nblex_unichar nblex_unicode_max_codepoint = 0x10FFFF;
-
 
 /**
  * nblex_unicode_utf8_string_put_char:
@@ -243,7 +240,7 @@ nblex_unicode_utf8_string_get_char(const unsigned char *input, size_t length,
   if(c == 0xFFFE || c == 0xFFFF)
     return -3;
 
-  if(c > nblex_unicode_max_codepoint)
+  if(c > NBLEX_UNICODE_MAX_CODEPOINT)
     return -4;
 
   return NBLEX_GOOD_CAST(int, size); /* ok since size is in range 1..6 */
