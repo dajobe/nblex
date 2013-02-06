@@ -72,6 +72,17 @@ struct nblex_world_s {
 #define NBLEX_BAD_CAST(t, v) (t)(v)
 
 
+/* nblex_unicode.c */
+int nblex_unicode_utf8_string_put_char(nblex_unichar c, unsigned char *output, size_t length);
+int nblex_unicode_utf8_string_get_char(const unsigned char *input, size_t length, nblex_unichar *output);
+int nblex_unicode_is_xml11_namestartchar(nblex_unichar c);
+int nblex_unicode_is_xml10_namestartchar(nblex_unichar c);
+int nblex_unicode_is_namestartchar(nblex_unichar c);
+int nblex_unicode_is_xml10_namechar(nblex_unichar c);
+int nblex_unicode_is_xml11_namechar(nblex_unichar c);
+int nblex_unicode_is_namechar(nblex_unichar c);
+
+
 /* end of NBLEX_INTERNAL */
 #endif
 
