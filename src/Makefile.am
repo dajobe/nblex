@@ -8,7 +8,8 @@ noinst_HEADERS = nblex_internal.h
 libnblex_la_LDFLAGS = -version-info @NBLEX_LIBTOOL_VERSION@
 libnblex_la_SOURCES = \
 nblex_core.c \
-nblex_unicode.c
+nblex_unicode.c \
+nblex_lex.c
 
 
 bin_PROGRAMS = nblex

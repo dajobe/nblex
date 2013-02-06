@@ -62,6 +62,23 @@ struct nblex_world_s {
   /* opened flag */
   int opened;
 
+  /* non-0 if lexing has started */
+  int started;
+
+  /* Bytes byffer - bytes provided so far that have not yet formed a Unicode
+   * Unicode codepoint.  This is always fixed at capacity 4 but can vary
+   * in number of bytes stored, in @bytes_size.
+   */
+  unsigned char bytes[4];
+  size_t bytes_size;
+
+  /* Unicode codepoints buffer - codepoints so far that have not yet
+   * formed a token. @codepoints_capacity is the size of this buffer
+   * (in codepoints) and @codepoints_size the current use.
+   */
+  nblex_unichar* codepoints;
+  size_t codepoints_capacity;
+  size_t codepoints_size;
 };
 
 

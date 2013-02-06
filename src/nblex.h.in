@@ -116,8 +116,16 @@ typedef unsigned long nblex_unichar;
 /* Library initialisation */
 NBLEX_API nblex_world* nblex_new_world(void);
 NBLEX_API int nblex_world_open(nblex_world *world);
-NBLEX_API void nblex_free_world(nblex_world* world);
+NBLEX_API int nblex_free_world(nblex_world* world);
 
+/* Lexing */
+NBLEX_API int nblex_start(nblex_world* world);
+NBLEX_API int nblex_finish(nblex_world* world);
+
+NBLEX_API int nblex_add_byte(nblex_world* world, const unsigned char b);
+NBLEX_API int nblex_add_bytes(nblex_world* world, const unsigned char* buffer, size_t len);
+NBLEX_API int nblex_add_codepoint(nblex_world* world, const nblex_unichar codepoint);
+NBLEX_API int nblex_add_codepoints(nblex_world* world, const nblex_unichar* codepoints, size_t len);
 
 #ifdef __cplusplus
 }

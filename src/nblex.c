@@ -48,6 +48,12 @@ main(int argc, char *argv[])
   int help = 0;
   int usage = 0;
   nblex_world* world = NULL;
+#define BUFFER_SIZE 1024
+  unsigned char* buffer;
+  size_t buffer_size;
+  size_t nitems;
+  FILE* stream = stdin;
+  int rc = 0;
 
   if(argc == 2) {
     const char* arg = argv[1];
@@ -58,7 +64,7 @@ main(int argc, char *argv[])
     } else if(!strcmp(arg, "-h") || !strcmp(arg, "--help")) {
       help = 1;
     }
-  } else
+  } else if(argc != 1)
     usage = 1;
 
   if(usage) {
@@ -74,7 +80,44 @@ main(int argc, char *argv[])
 
 
   world = nblex_new_world();
+  if(!world) {
+    fprintf(stderr, "%s: nblex_new_world() failed\n", program);
+    goto fail;
+  }
+
+  if(nblex_start(world)) {
+    fprintf(stderr, "%s: nblex_start() failed\n", program);
+    goto fail;
+  }
+
+  if(stream) {
+    buffer_size = BUFFER_SIZE;
+    buffer = NBLEX_CALLOC(unsigned char*, sizeof(*buffer), buffer_size);
+
+    while(!feof(stream)) {
+      nitems = fread(buffer, sizeof(*buffer), buffer_size, stream);
+      rc = nblex_add_bytes(world, buffer, nitems);
+      if(rc) {
+        fprintf(stderr, "%s: nblex_add_bytes() failed\n", program);
+        break;
+      }
+    }
+    fclose(stream);
+    stream = NULL;
+    if(rc)
+      goto fail;
+  }
+
+  if(nblex_finish(world)) {
+    fprintf(stderr, "%s: nblex_finish() failed\n", program);
+    goto fail;
+  }
+
+  /* success */
   goto tidy;
+
+  fail:
+  rc = 1;
 
   tidy:
   if(world)

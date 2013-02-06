@@ -94,12 +94,21 @@ nblex_world_open(nblex_world *world)
  *
  * Destroys a nblex_world object and all static information.
  *
+ * Return value: non-0 on failure
  **/
-void
+int
 nblex_free_world(nblex_world* world)
 {
   if(!world)
-    return;
+    return 1;
+
+  if(world->codepoints_capacity) {
+    NBLEX_FREE(nblex_unchar*, world->codepoints);
+    world->codepoints = NULL;
+    world->codepoints_capacity = 0;
+  }
 
   NBLEX_FREE(nblex_world, world);
+
+  return 0;
 }
