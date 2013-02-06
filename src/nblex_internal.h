@@ -3,21 +3,21 @@
  * nblex_internal.h - internals
  *
  * Copyright (C) 2013, David Beckett http://www.dajobe.org/
- * 
+ *
  * This package is Free Software
- * 
+ *
  * It is licensed under the following three licenses as alternatives:
  *   1. GNU Lesser General Public License (LGPL) V2.1 or any newer version
  *   2. GNU General Public License (GPL) V2 or any newer version
  *   3. Apache License, V2.0 or any newer version
- * 
+ *
  * You may not use this file except in compliance with at least one of
  * the above three licenses.
- * 
+ *
  * See LICENSE.html or LICENSE.txt at the top of this package for the
  * complete terms and further detail along with the license texts for
  * the licenses in COPYING.LIB, COPYING and LICENSE-2.0.txt respectively.
- * 
+ *
  */
 
 
@@ -42,7 +42,7 @@ extern "C" {
 #endif
 
 #ifdef __GNUC__
-#define NBLEX_NORETURN __attribute__((noreturn)) 
+#define NBLEX_NORETURN __attribute__((noreturn))
 #else
 #define NBLEX_NORETURN
 #endif
