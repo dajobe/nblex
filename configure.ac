@@ -19,6 +19,15 @@ AM_PROG_AR
 AC_PROG_CXX
 AC_PROG_AWK
 AC_PROG_CC
+AM_PROG_CC_C_O
+AC_MSG_CHECKING(whether $CC is clang)
+CC_IS_CLANG=no
+if $CC 2>&1 | grep clang >/dev/null 2>&1; then
+  CC_IS_CLANG=yes
+else
+  :
+fi
+AC_MSG_RESULT($CC_IS_CLANG)
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_LN_S
@@ -40,6 +49,10 @@ AC_CHECK_HEADERS([string.h stdlib.h])
 AC_DEFUN([NBLEX_CC_TRY_FLAG], [
   AC_MSG_CHECKING([whether $CC supports $1])
   nblex_save_CFLAGS="$CFLAGS"
+  if test $CC_IS_CLANG = yes; then
+    # Make unknown warnings into errors for clang so the test below works
+    CFLAGS="-Werror $CFLAGS"
+  fi
   CFLAGS="$CFLAGS $1"
   AC_COMPILE_IFELSE([AC_LANG_SOURCE([ ])], [nblex_cc_flag=yes], [nblex_cc_flag=no])
   CFLAGS="$nblex_save_CFLAGS"
