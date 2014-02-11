@@ -2,7 +2,7 @@
  *
  * nblex.c - Non-blocking lexer test
  *
- * Copyright (C) 2013, David Beckett http://www.dajobe.org/
+ * Copyright (C) 2013-2014, David Beckett http://www.dajobe.org/
  *
  * This package is Free Software
  *

@@ -2,9 +2,9 @@
  *
  * nblex_unicode.c - UTF-8 decoding
  *
- * Copyright (C) 2003, David Beckett http://www.dajobe.org/
+ * Copyright (C) 2013-2014, David Beckett http://www.dajobe.org/
  *
- * This package is Free Software and part of Redland http://librdf.org/
+ * This package is Free Software
  *
  * It is licensed under the following three licenses as alternatives:
  *   1. GNU Lesser General Public License (LGPL) V2.1 or any newer version
