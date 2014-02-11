@@ -152,7 +152,7 @@ int
 nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
                 size_t len)
 {
-  int rc;
+  int rc = 1;
   size_t bytes_offset = world->bytes_size /* 0 .. 3 */ ;
   
   if(!world || world->ended)
@@ -171,9 +171,10 @@ nblex_add_bytes(nblex_world* world, const unsigned char* buffer,
 
       rc = nblex_add_codepoint(world, output);
       bytes_offset = 0;
+
+      if(!rc)
+        rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_END_OF_INPUT);
     }
-    if(!rc)
-      rc = nblex_add_codepoint(world, NBLEX_CODEPOINT_END_OF_INPUT);
     world->ended = 1;
   } else {
     /* process input data */
