@@ -109,6 +109,7 @@ possible_warnings="\
 -Wstrict-prototypes \
 -Wswitch-enum \
 -Wundef \
+-Wunreachable-code \
 -Wunsafe-loop-optimizations \
 -Wwrite-strings \
 \
@@ -135,6 +136,13 @@ fi
 
 MAINTAINER_CPPFLAGS="$warning_cflags"
 
+
+debug_messages=no
+
+AC_ARG_ENABLE(debug, [  --enable-debug          Enable debug messages (default no).  ], debug_messages=$enableval)	
+if test "$debug_messages" = "yes"; then
+  AC_DEFINE([NBLEX_DEBUG], [1], [Define to 1 if debug messages are enabled.])
+fi
 
 if test "$USE_MAINTAINER_MODE" = yes; then
   AC_DEFINE([MAINTAINER_MODE], [1], [Define to 1 if maintainer mode is enabled.])
