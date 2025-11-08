@@ -748,7 +748,7 @@ GET /health
 ### Technology Stack
 
 **Core Language:** C (for performance, portability)
-- Targeting C11 standard
+- Targeting C11 (ISO/IEC 9899:2011) standard for modern features
 - Minimal dependencies for base functionality
 - Optional features can add dependencies
 
@@ -776,6 +776,110 @@ GET /health
 - Go (cgo)
 - Rust (bindgen)
 - Node.js (N-API)
+
+### Testing Strategy
+
+Testing nblex presents unique challenges due to its dual nature (logs + network) and real-time requirements. A comprehensive multi-layered approach is essential:
+
+**Unit Testing:**
+- **Parser tests** - Test each log format parser with known inputs/outputs
+- **Protocol dissectors** - Test HTTP, DNS, TCP parsing with crafted packets
+- **Filter expressions** - Test boolean logic, field matching, regex
+- **Correlation algorithms** - Test time-based, ID-based matching with synthetic events
+- **Framework:** Check or Unity for C unit testing
+- **Coverage target:** >80% for core logic
+
+**Integration Testing:**
+- **End-to-end flows** - Inject logs + packets, verify correlated output
+- **Multiple input sources** - Test file + network simultaneously
+- **Output validation** - Verify JSON, metrics, alerts are correct
+- **Resource limits** - Test memory/CPU quotas work
+- **Framework:** Custom test harness + shell scripts
+
+**Synthetic Testing:**
+- **Traffic generation** - Use tcpreplay for packet injection
+- **Log generation** - Scripts to generate realistic log patterns
+- **Known scenarios** - Pre-recorded pcap + log files with expected correlations
+- **Example:** Error log at T+0ms, TCP RST at T+50ms → should correlate
+
+**Fuzzing:**
+- **Input fuzzing** - AFL or libFuzzer for parsers (UTF-8, JSON, HTTP, pcap)
+- **Protocol fuzzing** - Malformed packets, invalid log formats
+- **State fuzzing** - Random event sequences to find crashes
+- **Critical for security** - Parsers handle untrusted input
+
+**Performance Testing:**
+- **Benchmarks** - Measure throughput (events/sec) with real-world data
+- **Latency tests** - Measure p50/p95/p99 processing latency
+- **Load tests** - Sustained high throughput (24+ hours)
+- **Profiling** - perf, valgrind, flamegraphs to find bottlenecks
+- **Tools:** Custom benchmark suite + perf
+
+**Real-world Testing:**
+- **Dogfooding** - Run nblex on its own logs/network
+- **Beta deployments** - Real production environments (with permission)
+- **Diverse environments** - Different log formats, traffic patterns, OS versions
+- **Feedback loop** - User reports inform test cases
+
+**Regression Testing:**
+- **Test corpus** - Collection of real-world logs + pcaps (anonymized)
+- **CI pipeline** - All tests run on every commit
+- **Platform matrix** - Linux (Ubuntu, RHEL, Alpine), macOS, BSDs
+- **Sanitizers** - AddressSanitizer, ThreadSanitizer, UndefinedBehaviorSanitizer
+- **CI tools:** GitHub Actions, pre-commit hooks
+
+**Challenges & Mitigations:**
+
+1. **Challenge:** Timing-dependent correlation is hard to test deterministically
+   - **Mitigation:** Mock time in tests, use synthetic timestamps
+
+2. **Challenge:** Network capture requires root privileges
+   - **Mitigation:** Use pre-captured pcap files for most tests, dedicated test VMs for live capture
+
+3. **Challenge:** Difficult to reproduce real-world correlation scenarios
+   - **Mitigation:** Build corpus of real incidents (anonymized), community-contributed test cases
+
+4. **Challenge:** Performance tests may vary by hardware
+   - **Mitigation:** Relative benchmarks (vs. baseline), normalized metrics, dedicated test hardware
+
+5. **Challenge:** Testing distributed mode requires multiple machines
+   - **Mitigation:** Docker Compose for local multi-node testing, cloud ephemeral instances for CI
+
+**Test Data Management:**
+```
+tests/
+├── unit/                    # Unit tests for individual components
+│   ├── test_parsers.c
+│   ├── test_correlation.c
+│   └── test_filters.c
+├── integration/             # End-to-end integration tests
+│   ├── test_file_and_pcap.sh
+│   └── test_alerting.sh
+├── data/                    # Test data corpus
+│   ├── logs/
+│   │   ├── nginx_access.log
+│   │   ├── app_errors.json
+│   │   └── syslog_samples.log
+│   ├── pcaps/
+│   │   ├── http_traffic.pcap
+│   │   ├── dns_queries.pcap
+│   │   └── tcp_retransmits.pcap
+│   └── scenarios/           # Known correlation scenarios
+│       ├── scenario_001_error_with_network_timeout/
+│       │   ├── input.log
+│       │   ├── input.pcap
+│       │   └── expected_output.json
+│       └── scenario_002_sql_injection_attempt/
+│           ├── input.log
+│           ├── input.pcap
+│           └── expected_output.json
+├── fuzz/                    # Fuzzing harnesses
+│   ├── fuzz_json_parser.c
+│   └── fuzz_http_parser.c
+└── bench/                   # Performance benchmarks
+    ├── bench_throughput.c
+    └── bench_latency.c
+```
 
 ### Performance Targets
 
@@ -971,7 +1075,8 @@ security:
 ### Business Decisions
 1. **Licensing**
    - Apache 2.0 vs. GPL vs. dual-license (open core)
-   - Decision: Apache 2.0 for maximum adoption
+   - Decision: Start with Apache 2.0 for maximum adoption
+   - Note: Final license will depend on dependencies used (e.g., libpcap is BSD, libuv is MIT, both compatible with Apache 2.0)
 
 2. **Monetization**
    - Open source only vs. enterprise features vs. cloud service
@@ -1056,6 +1161,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, 
 ### License
 
 Apache License 2.0 - See [LICENSE](LICENSE) file for details.
+
+**Dependency Licenses:**
+- libpcap - BSD 3-Clause (compatible with Apache 2.0)
+- libuv - MIT (compatible with Apache 2.0)
+- libjansson - MIT (compatible with Apache 2.0)
+- PCRE2 - BSD 3-Clause (compatible with Apache 2.0)
+
+All required dependencies use permissive licenses compatible with Apache 2.0. The final combined work may be distributed under Apache 2.0.
 
 ---
 
