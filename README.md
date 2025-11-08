@@ -52,16 +52,21 @@ When complete, nblex will:
 - Project structure and build system (CMake)
 - Public API defined (`include/nblex/nblex.h`)
 - Core world management (initialization, lifecycle)
-- Command-line tool skeleton
+- Event loop implementation (libuv-based)
+- File tailing with JSON parsing
+- Network capture with libpcap
+- HTTP/1.1 protocol parsing
+- Time-based correlation engine (±100ms)
+- JSON output
+- Command-line tool with basic options
 - Testing infrastructure
 - Documentation and specification
 
 **🚧 In Progress:**
-- Event loop implementation
-- Log parsers (JSON, logfmt, syslog)
-- Network capture (pcap, eBPF)
-- Correlation engine
-- Output handlers
+- Additional log parsers (logfmt, syslog)
+- Additional protocol parsers (DNS, TLS)
+- Advanced correlation strategies
+- Output handlers (metrics, alerts)
 
 **📋 Planned:**
 - Query language (nQL)
@@ -98,14 +103,17 @@ make
 # View help
 ./nblex --help
 
-# Monitor logs (placeholder - not yet functional)
+# Monitor logs
 ./nblex --logs /var/log/app.log --output json
 
-# Monitor logs and network (placeholder - not yet functional)
-./nblex --logs /var/log/app.log --network eth0
+# Monitor network traffic
+sudo ./nblex --network eth0 --output json
+
+# Monitor both logs and network (with automatic correlation)
+sudo ./nblex --logs /var/log/app.log --network eth0 --output json
 ```
 
-**Note:** Core monitoring functionality is under development. The CLI currently demonstrates argument parsing and basic structure.
+**Note:** Network capture requires root privileges or `CAP_NET_RAW` capability. The tool automatically correlates log and network events occurring within ±100ms of each other.
 
 ## Example Usage (Planned)
 
@@ -324,14 +332,15 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ## Roadmap
 
-### Phase 1: Foundation (Months 1-2)
+### Phase 1: Foundation (Months 1-2) ✅ **Complete**
 - [x] Project structure
 - [x] Build system
 - [x] Public API
-- [ ] Event loop (libuv)
-- [ ] Basic log parsing (JSON)
-- [ ] Basic pcap capture
-- [ ] Time-based correlation
+- [x] Event loop (libuv)
+- [x] Basic log parsing (JSON)
+- [x] Basic pcap capture
+- [x] HTTP/1.1 parsing
+- [x] Time-based correlation
 
 ### Phase 2: Alpha (Months 3-4)
 - [ ] Multi-format log parsing

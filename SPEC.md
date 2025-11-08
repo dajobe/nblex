@@ -934,7 +934,7 @@ security:
 
 ## Milestones & Roadmap
 
-### Milestone 1: Proof of Concept (2 months)
+### Milestone 1: Proof of Concept (2 months) ✅ **Complete**
 **Goal:** Demonstrate basic correlation between logs and network
 
 **Deliverables:**
@@ -943,13 +943,13 @@ security:
 - [x] Basic pcap capture and HTTP parsing
 - [x] Time-based correlation (±100ms window)
 - [x] JSON output
-- [ ] CLI tool with basic options
-- [ ] README and getting started guide
+- [x] CLI tool with basic options
+- [x] README and getting started guide
 
 **Success Criteria:**
-- Can monitor a log file and network interface simultaneously
-- Can correlate ERROR logs with network events
-- Outputs correlated events as JSON
+- ✅ Can monitor a log file and network interface simultaneously
+- ✅ Can correlate ERROR logs with network events
+- ✅ Outputs correlated events as JSON
 
 ### Milestone 2: Alpha Release (4 months)
 **Goal:** Feature-complete for single-node deployment
