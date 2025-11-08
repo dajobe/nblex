@@ -6,14 +6,52 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-#include "nblex/nblex.h"
+#include "../nblex_internal.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
-struct nblex_event_s {
-  nblex_event_type type;
-  /* TODO: Add event data fields */
-};
+nblex_event* nblex_event_new(nblex_event_type type, nblex_input* input) {
+  nblex_event* event = calloc(1, sizeof(nblex_event));
+  if (!event) {
+    return NULL;
+  }
+
+  event->type = type;
+  event->input = input;
+  event->timestamp_ns = nblex_timestamp_now();
+  event->data = NULL;
+
+  return event;
+}
+
+void nblex_event_free(nblex_event* event) {
+  if (!event) {
+    return;
+  }
+
+  if (event->data) {
+    json_decref(event->data);
+  }
+
+  free(event);
+}
+
+void nblex_event_emit(nblex_world* world, nblex_event* event) {
+  if (!world || !event) {
+    return;
+  }
+
+  world->events_processed++;
+
+  /* Call event handler if registered */
+  if (world->event_handler) {
+    world->event_handler(event, world->event_handler_data);
+  }
+
+  /* Free event after handling */
+  nblex_event_free(event);
+}
 
 nblex_event_type nblex_event_get_type(nblex_event* event) {
   if (!event) {
@@ -27,10 +65,10 @@ char* nblex_event_to_json(nblex_event* event) {
     return NULL;
   }
 
-  /* TODO: Implement JSON serialization */
-  char* json = strdup("{\"type\": \"placeholder\"}");
-  return json;
+  return nblex_event_to_json_string(event);
 }
+
+/* Version functions */
 
 const char* nblex_version_string(void) {
   return NBLEX_VERSION_STRING;

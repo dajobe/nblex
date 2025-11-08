@@ -45,9 +45,11 @@ endif()
 # Find required dependencies
 find_package(PkgConfig REQUIRED)
 
-# TODO: Uncomment when implementing
-# pkg_check_modules(LIBUV REQUIRED libuv)
-# pkg_check_modules(JANSSON REQUIRED jansson)
+# Core dependencies
+pkg_check_modules(LIBUV REQUIRED libuv)
+pkg_check_modules(JANSSON REQUIRED jansson)
+
+# Optional dependencies (TODO: add later)
 # pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 # find_library(PCAP_LIBRARY pcap REQUIRED)
 
@@ -55,6 +57,8 @@ find_package(PkgConfig REQUIRED)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${LIBUV_INCLUDE_DIRS}
+    ${JANSSON_INCLUDE_DIRS}
 )
 
 # Generate version header
@@ -69,19 +73,15 @@ set(NBLEX_SOURCES
     src/core/nblex_world.c
     src/core/nblex_event.c
 
-    # Input (TODO: implement)
-    # src/input/file_input.c
-    # src/input/pcap_input.c
+    # Input
+    src/input/file_input.c
+    src/input/input_base.c
 
-    # Parsers (TODO: implement)
-    # src/parsers/json_parser.c
-    # src/parsers/http_parser.c
+    # Parsers
+    src/parsers/json_parser.c
 
-    # Correlation (TODO: implement)
-    # src/correlation/time_based.c
-
-    # Output (TODO: implement)
-    # src/output/json_output.c
+    # Output
+    src/output/json_output.c
 
     # Utilities
     src/util/memory.c
@@ -96,13 +96,11 @@ set_target_properties(nblex PROPERTIES
     PUBLIC_HEADER include/nblex/nblex.h
 )
 
-# TODO: Link dependencies when implementing
-# target_link_libraries(nblex
-#     ${LIBUV_LIBRARIES}
-#     ${JANSSON_LIBRARIES}
-#     ${PCRE2_LIBRARIES}
-#     ${PCAP_LIBRARY}
-# )
+# Link dependencies
+target_link_libraries(nblex
+    ${LIBUV_LIBRARIES}
+    ${JANSSON_LIBRARIES}
+)
 
 # Build CLI tool
 if(NBLEX_BUILD_CLI)
