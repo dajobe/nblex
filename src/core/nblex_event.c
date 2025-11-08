@@ -44,6 +44,11 @@ void nblex_event_emit(nblex_world* world, nblex_event* event) {
 
   world->events_processed++;
 
+  /* Process through correlation engine if available */
+  if (world->correlation) {
+    nblex_correlation_process_event(world->correlation, event);
+  }
+
   /* Call event handler if registered */
   if (world->event_handler) {
     world->event_handler(event, world->event_handler_data);

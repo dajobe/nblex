@@ -49,9 +49,11 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBUV REQUIRED libuv)
 pkg_check_modules(JANSSON REQUIRED jansson)
 
+# Network dependencies
+find_library(PCAP_LIBRARY pcap REQUIRED)
+
 # Optional dependencies (TODO: add later)
 # pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
-# find_library(PCAP_LIBRARY pcap REQUIRED)
 
 # Include directories
 include_directories(
@@ -64,7 +66,7 @@ include_directories(
 # Generate version header
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/nblex/version.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/nblex/version.h
+    ${CMAKE_CURRENT_BINARY_DIR}/include/nblex/version.h
 )
 
 # Source files
@@ -75,10 +77,15 @@ set(NBLEX_SOURCES
 
     # Input
     src/input/file_input.c
+    src/input/pcap_input.c
     src/input/input_base.c
 
     # Parsers
     src/parsers/json_parser.c
+    src/parsers/http_parser.c
+
+    # Correlation
+    src/correlation/time_correlation.c
 
     # Output
     src/output/json_output.c
@@ -100,6 +107,7 @@ set_target_properties(nblex PROPERTIES
 target_link_libraries(nblex
     ${LIBUV_LIBRARIES}
     ${JANSSON_LIBRARIES}
+    ${PCAP_LIBRARY}
 )
 
 # Build CLI tool

@@ -55,6 +55,15 @@ int nblex_world_open(nblex_world* world) {
     return -1;
   }
 
+  /* Create correlation engine */
+  world->correlation = nblex_correlation_new(world);
+  if (!world->correlation) {
+    return -1;
+  }
+
+  /* Set default 100ms time-based correlation */
+  nblex_correlation_add_strategy(world->correlation, NBLEX_CORR_TIME_BASED, 100);
+
   world->opened = true;
   return 0;
 }
@@ -67,6 +76,11 @@ void nblex_world_free(nblex_world* world) {
   /* Stop if running */
   if (world->running) {
     nblex_world_stop(world);
+  }
+
+  /* Free correlation engine */
+  if (world->correlation) {
+    nblex_correlation_free(world->correlation);
   }
 
   /* Free inputs */
@@ -95,6 +109,13 @@ int nblex_world_start(nblex_world* world) {
 
   if (world->started) {
     return -1;  /* Already started */
+  }
+
+  /* Start correlation engine */
+  if (world->correlation) {
+    if (nblex_correlation_start(world->correlation) != 0) {
+      return -1;
+    }
   }
 
   /* Start all inputs */
