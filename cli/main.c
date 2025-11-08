@@ -36,6 +36,22 @@ static void print_usage(const char* program) {
   printf("  %s --config /etc/nblex/config.yaml\n", program);
 }
 
+static void event_handler_json(nblex_event* event, void* user_data) {
+  (void)user_data;  /* Unused */
+
+  if (!event) {
+    return;
+  }
+
+  /* Convert event to JSON and print */
+  char* json_str = nblex_event_to_json(event);
+  if (json_str) {
+    printf("%s\n", json_str);
+    fflush(stdout);
+    free(json_str);
+  }
+}
+
 int main(int argc, char** argv) {
   const char* log_path = NULL;
   const char* network_iface = NULL;
@@ -106,23 +122,58 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  /* TODO: Configure inputs based on command-line arguments */
+  /* Configure inputs based on command-line arguments */
+  nblex_input* log_input = NULL;
   if (log_path) {
-    printf("Would monitor logs: %s\n", log_path);
+    log_input = nblex_input_file_new(world, log_path);
+    if (!log_input) {
+      fprintf(stderr, "Error: Failed to create log input for %s\n", log_path);
+      nblex_world_free(world);
+      return 1;
+    }
+
+    /* Set format to JSON by default */
+    nblex_input_set_format(log_input, NBLEX_FORMAT_JSON);
+    printf("Monitoring logs: %s (format: json)\n", log_path);
   }
 
   if (network_iface) {
-    printf("Would monitor network: %s\n", network_iface);
+    fprintf(stderr, "Warning: Network monitoring not yet implemented\n");
+    fprintf(stderr, "         Network interface '%s' will be ignored\n", network_iface);
   }
 
   if (filter) {
-    printf("Would apply filter: %s\n", filter);
+    fprintf(stderr, "Warning: Filtering not yet implemented\n");
+    fprintf(stderr, "         Filter '%s' will be ignored\n", filter);
   }
 
-  printf("Output format: %s\n", output_format);
+  /* Set up event handler */
+  if (strcmp(output_format, "json") == 0) {
+    nblex_set_event_handler(world, event_handler_json, NULL);
+  } else {
+    fprintf(stderr, "Error: Unsupported output format '%s'\n", output_format);
+    fprintf(stderr, "       Only 'json' is currently supported\n");
+    nblex_world_free(world);
+    return 1;
+  }
 
-  /* TODO: Start processing */
-  printf("\nNote: nblex is under development. Core functionality not yet implemented.\n");
+  /* Start processing */
+  printf("Starting nblex...\n");
+
+  if (nblex_world_start(world) != 0) {
+    fprintf(stderr, "Error: Failed to start nblex world\n");
+    nblex_world_free(world);
+    return 1;
+  }
+
+  printf("Running... (Press Ctrl+C to stop)\n\n");
+
+  /* Run event loop (blocking) */
+  int result = nblex_world_run(world);
+
+  if (result != 0) {
+    fprintf(stderr, "Error: Event loop exited with error\n");
+  }
 
   /* Cleanup */
   nblex_world_free(world);

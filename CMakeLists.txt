@@ -64,7 +64,7 @@ include_directories(
 # Generate version header
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/nblex/version.h.in
-    ${CMAKE_CURRENT_BINARY_DIR}/nblex/version.h
+    ${CMAKE_CURRENT_BINARY_DIR}/include/nblex/version.h
 )
 
 # Source files
