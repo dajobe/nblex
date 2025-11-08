@@ -26,8 +26,8 @@ nblex/version.h
 *.lib
 
 # Executables
-nblex
-nblex-cli
+/nblex
+/nblex-cli
 *.exe
 *.out
 
@@ -74,6 +74,6 @@ leak-*
 .gdbinit
 TAGS
 tags
-core
+/core
 vgcore.*
 *.stackdump
