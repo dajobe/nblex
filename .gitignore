@@ -1,31 +1,79 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+
+# Generated files
+*.pc
+nblex/version.h
+
+# Object files
+*.o
+*.so
+*.so.*
+*.a
+*.dylib
+*.dll
+*.lib
+
+# Executables
+nblex
+nblex-cli
 *.exe
-*.gz
-*.log
-*.stackdump
+*.out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
 *~
 .DS_Store
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Test outputs
+*.log
+*.trs
+test-suite.log
+
+# Coverage
+*.gcov
+*.gcda
+*.gcno
+*.info
+coverage/
+
+# Fuzzing
+fuzz-*.log
+crash-*
+leak-*
+
+# Compressed files
+*.gz
+*.bz2
+*.xz
+*.tar
+*.zip
+
+# Misc
 .gdb_history
 .gdbinit
-.libs
-INSTALL
-INSTALL
-LICENSE.txt
-LICENSE.txt
-Makefile
-Makefile.in
 TAGS
-aclocal.m4
-autom4te.cache
-compile
-config.cache
-config.log
-config.status
-configure
-git-version.h
-gtk-doc.make
-install-sh
-libtool
-mkinstalldirs
-nblex*bz2
-nblex*gz
-setup.sh
+tags
+core
+vgcore.*
+*.stackdump
