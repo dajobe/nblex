@@ -206,9 +206,35 @@ static void process_packet(nblex_input* input, const struct pcap_pkthdr* header,
   if (ip_header->ip_p == IPPROTO_TCP) {
     if (header->caplen >= 14 + ip_header_len + sizeof(struct tcphdr)) {
       const struct tcphdr* tcp = (struct tcphdr*)transport_header;
+      uint16_t src_port = ntohs(tcp->th_sport);
+      uint16_t dst_port = ntohs(tcp->th_dport);
+
       json_object_set_new(packet_data, "protocol_name", json_string("TCP"));
-      json_object_set_new(packet_data, "src_port", json_integer(ntohs(tcp->th_sport)));
-      json_object_set_new(packet_data, "dst_port", json_integer(ntohs(tcp->th_dport)));
+      json_object_set_new(packet_data, "src_port", json_integer(src_port));
+      json_object_set_new(packet_data, "dst_port", json_integer(dst_port));
+
+      /* Try to parse HTTP if on common HTTP ports */
+      int is_http_port = (src_port == 80 || dst_port == 80 ||
+                         src_port == 8080 || dst_port == 8080 ||
+                         src_port == 8000 || dst_port == 8000 ||
+                         src_port == 3000 || dst_port == 3000);
+
+      if (is_http_port) {
+        /* Calculate TCP header length and payload offset */
+        int tcp_header_len = ((tcp->th_off) * 4);
+        size_t tcp_payload_offset = 14 + ip_header_len + tcp_header_len;
+
+        if (header->caplen > tcp_payload_offset) {
+          const u_char* tcp_payload = packet + tcp_payload_offset;
+          size_t tcp_payload_len = header->caplen - tcp_payload_offset;
+
+          /* Try to parse as HTTP */
+          json_t* http_data = nblex_parse_http(tcp_payload, tcp_payload_len);
+          if (http_data) {
+            json_object_set_new(packet_data, "http", http_data);
+          }
+        }
+      }
     }
   } else if (ip_header->ip_p == IPPROTO_UDP) {
     if (header->caplen >= 14 + ip_header_len + sizeof(struct udphdr)) {

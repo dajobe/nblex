@@ -44,6 +44,9 @@ struct nblex_world_s {
   nblex_event_handler event_handler;
   void* event_handler_data;
 
+  /* Correlation engine */
+  nblex_correlation* correlation;
+
   /* Statistics */
   uint64_t events_processed;
   uint64_t events_correlated;
@@ -126,6 +129,37 @@ typedef struct {
 } nblex_pcap_input_data;
 
 /*
+ * Correlation event buffer entry
+ */
+typedef struct nblex_event_buffer_entry_s {
+  nblex_event* event;
+  struct nblex_event_buffer_entry_s* next;
+} nblex_event_buffer_entry;
+
+/*
+ * Correlation structure
+ */
+struct nblex_correlation_s {
+  nblex_world* world;
+
+  /* Correlation strategies */
+  nblex_correlation_type type;
+  uint64_t window_ns;  /* Time window in nanoseconds */
+
+  /* Event buffers for time-based correlation */
+  nblex_event_buffer_entry* log_events;
+  nblex_event_buffer_entry* network_events;
+  size_t log_events_count;
+  size_t network_events_count;
+
+  /* Timer for periodic cleanup */
+  uv_timer_t cleanup_timer;
+
+  /* Statistics */
+  uint64_t correlations_found;
+};
+
+/*
  * Internal utility functions
  */
 
@@ -155,6 +189,15 @@ int nblex_world_add_input(nblex_world* world, nblex_input* input);
 
 /* JSON parsing */
 json_t* nblex_parse_json_line(const char* line);
+
+/* HTTP parsing */
+json_t* nblex_parse_http(const u_char* payload, size_t payload_len);
+json_t* nblex_parse_http_request(const u_char* payload, size_t payload_len);
+json_t* nblex_parse_http_response(const u_char* payload, size_t payload_len);
+
+/* Correlation */
+int nblex_correlation_start(nblex_correlation* corr);
+void nblex_correlation_process_event(nblex_correlation* corr, nblex_event* event);
 
 /* JSON output */
 char* nblex_event_to_json_string(nblex_event* event);

@@ -82,6 +82,10 @@ set(NBLEX_SOURCES
 
     # Parsers
     src/parsers/json_parser.c
+    src/parsers/http_parser.c
+
+    # Correlation
+    src/correlation/time_correlation.c
 
     # Output
     src/output/json_output.c
