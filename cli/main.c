@@ -124,6 +124,8 @@ int main(int argc, char** argv) {
 
   /* Configure inputs based on command-line arguments */
   nblex_input* log_input = NULL;
+  nblex_input* pcap_input = NULL;
+
   if (log_path) {
     log_input = nblex_input_file_new(world, log_path);
     if (!log_input) {
@@ -138,8 +140,14 @@ int main(int argc, char** argv) {
   }
 
   if (network_iface) {
-    fprintf(stderr, "Warning: Network monitoring not yet implemented\n");
-    fprintf(stderr, "         Network interface '%s' will be ignored\n", network_iface);
+    pcap_input = nblex_input_pcap_new(world, network_iface);
+    if (!pcap_input) {
+      fprintf(stderr, "Error: Failed to create pcap input for %s\n", network_iface);
+      fprintf(stderr, "       Make sure you have permission to capture packets (try running with sudo)\n");
+      nblex_world_free(world);
+      return 1;
+    }
+    printf("Monitoring network: %s\n", network_iface);
   }
 
   if (filter) {

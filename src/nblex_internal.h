@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <uv.h>
 #include <jansson.h>
+#include <pcap.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
@@ -108,6 +109,21 @@ typedef struct {
   size_t line_buffer_size;
   size_t line_buffer_capacity;
 } nblex_file_input_data;
+
+/*
+ * Pcap input data
+ */
+typedef struct {
+  char* interface;
+  pcap_t* pcap_handle;
+  uv_poll_t poll_handle;
+  int pcap_fd;
+  bool capturing;
+
+  /* Statistics */
+  uint64_t packets_captured;
+  uint64_t packets_dropped;
+} nblex_pcap_input_data;
 
 /*
  * Internal utility functions
