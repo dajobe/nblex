@@ -1,251 +1,394 @@
-# nblex - Non-Blocking Lexer
+# nblex - Network & Buffer Log EXplorer
 
-A lightweight C library for performing lexical analysis with Unicode support in a non-blocking, streaming manner.
+**Status:** 🚧 Under active development - Foundation complete, core features in progress
 
-## Overview
+A unified observability platform that correlates application logs with network traffic in real-time, providing unprecedented visibility into system behavior.
 
-nblex (Non-Blocking Lexer) is designed to process text input incrementally, making it ideal for applications that need to parse or analyze text/XML content where data arrives in chunks (network streams, pipes, etc.) rather than all at once. The library automatically handles UTF-8 to Unicode conversion and maintains state across multiple input calls.
+## What is nblex?
 
-## Features
+nblex uniquely combines **log analysis** with **network monitoring** to answer questions that traditional tools can't:
 
-- **Streaming Input Processing** - Process data byte-by-byte or in chunks without requiring the entire input upfront
-- **UTF-8 to Unicode Conversion** - Automatic decoding of UTF-8 byte sequences into Unicode codepoints
-- **Non-Blocking Architecture** - Stateful processing allows for incremental data handling
-- **XML Name Validation** - Built-in functions for validating XML 1.0/1.1 naming rules
-- **Flexible Input Methods** - Accept data as raw bytes (auto-decoded) or pre-decoded Unicode codepoints
-- **Error Handling** - Detects and reports invalid UTF-8 sequences
-- **Cross-Platform** - Standard C library with minimal dependencies
+- "Show me all ERROR logs that occurred during TCP retransmissions"
+- "Which API endpoints log success but return HTTP 500?"
+- "Correlate slow database queries with actual network latency to MySQL"
+- "What happened in the application when this network timeout occurred?"
 
-## Requirements
+### The Problem
 
-- C compiler (GCC, Clang, or compatible)
-- Autotools (autoconf >= 2.62, automake >= 1.11)
-- libtool
-- Standard C library headers (string.h, stdlib.h)
+Traditional observability tools operate in silos:
+- **Log analyzers** (ELK, Splunk) don't see network events
+- **Network monitors** (Wireshark, tcpdump) don't see application context
+- **Correlation is manual** - you stare at dashboards trying to connect the dots
 
-## Building
+### The Solution
 
-nblex uses the standard Autotools build system:
+nblex automatically correlates events across both layers:
+```
+Application Layer (logs) + Network Layer (packets) = Complete Picture
+```
+
+## Vision
+
+When complete, nblex will:
+
+1. **Stream logs and network traffic simultaneously**
+   - Tail log files, syslog, container logs
+   - Capture packets via pcap or eBPF
+   - Non-blocking architecture for high throughput
+
+2. **Automatically correlate events**
+   - Time-based correlation (events within time windows)
+   - ID-based correlation (trace IDs, request IDs)
+   - Connection correlation (match network flows to processes)
+
+3. **Provide actionable insights**
+   - Real-time alerts when patterns match
+   - SQL-like query language for ad-hoc analysis
+   - Export to metrics, dashboards, storage
+
+## Current Status
+
+**✅ Complete:**
+- Project structure and build system (CMake)
+- Public API defined (`include/nblex/nblex.h`)
+- Core world management (initialization, lifecycle)
+- Command-line tool skeleton
+- Testing infrastructure
+- Documentation and specification
+
+**🚧 In Progress:**
+- Event loop implementation
+- Log parsers (JSON, logfmt, syslog)
+- Network capture (pcap, eBPF)
+- Correlation engine
+- Output handlers
+
+**📋 Planned:**
+- Query language (nQL)
+- Distributed mode
+- Web UI
+- Language bindings (Python, Go, Rust)
+
+See [SPEC.md](SPEC.md) for complete specification and roadmap.
+
+## Quick Start
+
+### Prerequisites
+
+- C11 compiler (GCC 4.9+, Clang 3.3+, MSVC 2015+)
+- CMake 3.10+
+- Git
+
+### Building
 
 ```bash
-./autogen.sh      # Generate configure script (if building from git)
-./configure       # Configure the build
-make              # Build the library
-make check        # Run tests (optional)
-sudo make install # Install the library
+git clone https://github.com/dajobe/nblex.git
+cd nblex
+mkdir build && cd build
+cmake ..
+make
 ```
 
-### Build Options
-
-- `--enable-debug` - Enable debug messages (default: disabled)
-
-## Installation
-
-After building, install with:
+### Running
 
 ```bash
-sudo make install
+# Check version
+./nblex --version
+
+# View help
+./nblex --help
+
+# Monitor logs (placeholder - not yet functional)
+./nblex --logs /var/log/app.log --output json
+
+# Monitor logs and network (placeholder - not yet functional)
+./nblex --logs /var/log/app.log --network eth0
 ```
 
-This installs:
-- **libnblex** - Shared/static library
-- **nblex** - Command-line test utility
-- Header files in `/usr/local/include`
+**Note:** Core monitoring functionality is under development. The CLI currently demonstrates argument parsing and basic structure.
 
-## Usage
+## Example Usage (Planned)
 
-### Basic Example
+### Command Line
 
-```c
-#include <nblex.h>
-#include <stdio.h>
+```bash
+# Monitor nginx logs and correlate with network traffic
+nblex monitor \
+  --logs /var/log/nginx/access.log \
+  --network eth0 \
+  --filter 'log.status >= 500 OR network.tcp.retransmits > 0' \
+  --output json
 
-int main() {
-    // Initialize the lexer world
-    nblex_world* world = nblex_new_world();
-    if (!world) {
-        fprintf(stderr, "Failed to create nblex world\n");
-        return 1;
-    }
+# Real-time query
+nblex query "
+  SELECT
+    log.endpoint,
+    COUNT(*) as errors,
+    AVG(network.latency_ms) as avg_latency
+  FROM events
+  WHERE log.level == ERROR
+  GROUP BY log.endpoint
+  WINDOW tumbling(1 minute)
+"
 
-    if (nblex_world_open(world) != 0) {
-        fprintf(stderr, "Failed to open nblex world\n");
-        nblex_free_world(world);
-        return 1;
-    }
-
-    // Start lexing
-    nblex_start(world);
-
-    // Add bytes (UTF-8 encoded text)
-    const unsigned char* text = (const unsigned char*)"Hello, 世界!";
-    nblex_add_bytes(world, text, strlen((const char*)text));
-
-    // Or add individual bytes
-    nblex_add_byte(world, 'A');
-
-    // Finish lexing
-    nblex_finish(world);
-
-    // Clean up
-    nblex_free_world(world);
-
-    return 0;
-}
+# Load from config file
+nblex monitor --config /etc/nblex/config.yaml
 ```
 
-### Streaming Example
+### Configuration File
+
+```yaml
+# nblex.yaml
+inputs:
+  logs:
+    - name: app_logs
+      type: file
+      path: /var/log/app/*.log
+      format: json
+
+  network:
+    - name: main_interface
+      type: pcap
+      interface: eth0
+      filter: "tcp port 80 or tcp port 443"
+
+correlation:
+  enabled: true
+  strategies:
+    - type: time_based
+      window: 100ms
+
+alerts:
+  - name: high_error_rate_with_network_issues
+    query: |
+      SELECT COUNT(*) as errors
+      FROM events
+      WHERE log.level == ERROR
+        AND network.tcp.retransmits > 5
+      WINDOW tumbling(1 minute)
+    condition: errors > 100
+    actions:
+      - type: slack
+        webhook: ${SLACK_WEBHOOK_URL}
+```
+
+### C Library API
 
 ```c
-// Process data as it arrives (e.g., from network or file)
-nblex_world* world = nblex_new_world();
+#include <nblex/nblex.h>
+
+// Initialize
+nblex_world* world = nblex_world_new();
 nblex_world_open(world);
-nblex_start(world);
 
-// Read and process data in chunks
-unsigned char buffer[1024];
-size_t bytes_read;
+// Add log input
+nblex_input* log_input = nblex_input_file_new(world, "/var/log/app.log");
+nblex_input_set_format(log_input, NBLEX_FORMAT_JSON);
 
-while ((bytes_read = read_from_source(buffer, sizeof(buffer))) > 0) {
-    nblex_add_bytes(world, buffer, bytes_read);
-    // Process the decoded codepoints...
+// Add network input
+nblex_input* net_input = nblex_input_pcap_new(world, "eth0");
+
+// Enable correlation
+nblex_correlation* corr = nblex_correlation_new(world);
+nblex_correlation_add_strategy(corr, NBLEX_CORR_TIME_BASED, 100);
+
+// Set event handler
+void on_event(nblex_event* event, void* user_data) {
+    if (nblex_event_get_type(event) == NBLEX_EVENT_CORRELATION) {
+        printf("Correlated: %s\n", nblex_event_to_json(event));
+    }
 }
+nblex_set_event_handler(world, on_event, NULL);
 
-nblex_finish(world);
-nblex_free_world(world);
-```
+// Start monitoring
+nblex_world_start(world);
+nblex_world_run(world);  // Blocks
 
-### Using Unicode Codepoints Directly
-
-```c
-nblex_world* world = nblex_new_world();
-nblex_world_open(world);
-nblex_start(world);
-
-// Add pre-decoded Unicode codepoints
-nblex_unichar codepoints[] = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-nblex_add_codepoints(world, codepoints, 5);
-
-// Or individual codepoints
-nblex_add_codepoint(world, 0x4E16); // 世
-nblex_add_codepoint(world, 0x754C); // 界
-
-nblex_finish(world);
-nblex_free_world(world);
-```
-
-## API Reference
-
-### Initialization Functions
-
-```c
-nblex_world* nblex_new_world(void);
-```
-Create a new nblex world object.
-
-```c
-int nblex_world_open(nblex_world* world);
-```
-Open and initialize a world object for use.
-
-```c
-int nblex_free_world(nblex_world* world);
-```
-Free a world object and release resources.
-
-### Lexing Functions
-
-```c
-int nblex_start(nblex_world* world);
-```
-Start lexing process.
-
-```c
-int nblex_finish(nblex_world* world);
-```
-Finish lexing process.
-
-### Input Functions
-
-```c
-int nblex_add_byte(nblex_world* world, const unsigned char b);
-```
-Add a single byte to be processed.
-
-```c
-int nblex_add_bytes(nblex_world* world, const unsigned char* buffer, size_t len);
-```
-Add multiple bytes to be processed.
-
-```c
-int nblex_add_codepoint(nblex_world* world, const nblex_unichar codepoint);
-```
-Add a single Unicode codepoint.
-
-```c
-int nblex_add_codepoints(nblex_world* world, const nblex_unichar* codepoints, size_t len);
-```
-Add multiple Unicode codepoints.
-
-### Special Codepoint Values
-
-- `NBLEX_CODEPOINT_INVALID` (0xF0000D) - Invalid UTF-8 sequence detected
-- `NBLEX_CODEPOINT_END_OF_INPUT` (0xFFFFFF) - End of input reached
-- `NBLEX_UNICODE_MAX_CODEPOINT` (0x10FFFF) - Maximum valid Unicode codepoint
-
-## Command-Line Tool
-
-The `nblex` utility reads from stdin and processes it through the lexer:
-
-```bash
-echo "Hello, World!" | nblex
-cat file.txt | nblex
+// Cleanup
+nblex_world_free(world);
 ```
 
 ## Use Cases
 
-- **Streaming Parsers** - Parse XML/text from network streams without buffering entire document
-- **Protocol Handlers** - Process text-based protocols incrementally
-- **Interactive Applications** - Handle user input character-by-character with proper Unicode support
-- **Memory-Constrained Systems** - Process large files without loading them entirely into memory
-- **Pipeline Processing** - Filter and transform text in Unix-style pipelines
+### 1. Debugging Production Issues
+Correlate application errors with network timeouts, retransmissions, or connection resets.
 
-## Version
+### 2. Security Monitoring
+Detect data exfiltration by correlating SSH logins with large outbound transfers.
 
-Current version: **0.1**
+### 3. Performance Analysis
+Find slow API endpoints by measuring actual network latency, not just application-reported times.
+
+### 4. Compliance & Audit
+Track database queries with full network context for comprehensive audit trails.
+
+### 5. Microservices Tracing
+Follow requests across services by correlating logs and network flows with trace IDs.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     nblex Core                          │
+│                                                         │
+│  Inputs → Stream Processor → Correlation → Outputs     │
+│  (logs,   (parse, filter,    (time, ID,    (json,     │
+│   pcap)    aggregate)         pattern)      alerts)    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+- **Input Layer** - Log files, syslog, pcap, eBPF
+- **Stream Processor** - Parse, filter, normalize events
+- **Correlation Engine** - Match events across layers
+- **Output Layer** - JSON, metrics, alerts, storage
+
+See [SPEC.md](SPEC.md) for detailed architecture.
+
+## Performance Targets
+
+- **Throughput:** 100,000 log events/sec, 10 Gbps network traffic
+- **Latency:** <10ms end-to-end processing (p95)
+- **Memory:** <100MB baseline
+- **Correlation:** <5ms matching latency
+
+## Development
+
+### Project Structure
+
+```
+nblex/
+├── include/nblex/     # Public API headers
+├── src/
+│   ├── core/         # Event loop and world management
+│   ├── input/        # Log and network input handlers
+│   ├── parsers/      # Log format and protocol parsers
+│   ├── correlation/  # Correlation engine
+│   ├── output/       # Output handlers
+│   └── util/         # Utilities
+├── tests/            # Unit, integration, fuzz, benchmarks
+├── examples/         # Example programs
+├── cli/              # Command-line tool
+└── docs/             # Documentation
+```
+
+### Building with Options
+
+```bash
+# Debug build with sanitizers
+cmake -DCMAKE_BUILD_TYPE=Debug \
+      -DNBLEX_ENABLE_ASAN=ON \
+      -DNBLEX_ENABLE_UBSAN=ON ..
+
+# Release build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+
+# Without tests or examples
+cmake -DNBLEX_BUILD_TESTS=OFF \
+      -DNBLEX_BUILD_EXAMPLES=OFF ..
+```
+
+### Running Tests
+
+```bash
+cd build
+make test
+```
+
+### Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup
+- Coding standards
+- Testing requirements
+- Pull request process
+
+## Documentation
+
+- **[SPEC.md](SPEC.md)** - Complete specification, architecture, and roadmap
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development guidelines
+- **API Reference** - Generated from headers (coming soon)
+
+## Comparison with Existing Tools
+
+| Feature | nblex | Splunk | ELK | Wireshark | Datadog |
+|---------|-------|--------|-----|-----------|---------|
+| Log analysis | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Network monitoring | ✅ | ⚠️ | ❌ | ✅ | ✅ |
+| **Automatic correlation** | ✅ | ❌ | ❌ | ❌ | ⚠️ |
+| Real-time streaming | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| Open source | ✅ | ❌ | ✅ | ✅ | ❌ |
+| Self-hosted | ✅ | ⚠️ | ✅ | ✅ | ❌ |
+
+**Key differentiator:** nblex automatically correlates logs with network events - others require manual dashboard building.
+
+## Roadmap
+
+### Phase 1: Foundation (Months 1-2)
+- [x] Project structure
+- [x] Build system
+- [x] Public API
+- [ ] Event loop (libuv)
+- [ ] Basic log parsing (JSON)
+- [ ] Basic pcap capture
+- [ ] Time-based correlation
+
+### Phase 2: Alpha (Months 3-4)
+- [ ] Multi-format log parsing
+- [ ] HTTP/DNS/TCP dissection
+- [ ] Filter expressions
+- [ ] Query language basics
+- [ ] Multiple outputs
+- [ ] Unit tests (>70% coverage)
+
+### Phase 3: Beta (Months 5-6)
+- [ ] Advanced correlation (ID-based, sequences)
+- [ ] Alerting system
+- [ ] Prometheus export
+- [ ] Performance optimizations
+- [ ] Integration tests
+- [ ] Docker images
+
+### Phase 4: v1.0 (Months 7-9)
+- [ ] eBPF capture
+- [ ] Web UI
+- [ ] Distributed mode
+- [ ] Storage integrations
+- [ ] Language bindings
+- [ ] Production deployments
+
+See [SPEC.md](SPEC.md) for detailed milestones.
 
 ## License
 
-nblex is triple-licensed under your choice of:
+Licensed under the Apache License, Version 2.0. See [LICENSE-2.0.txt](LICENSE-2.0.txt) for details.
 
-1. **GNU Lesser General Public License (LGPL) V2.1** or any newer version
-2. **GNU General Public License (GPL) V2** or any newer version
-3. **Apache License, V2.0** or any newer version
+**Dependency Licenses:**
+- libpcap - BSD 3-Clause
+- libuv - MIT
+- libjansson - MIT
+- PCRE2 - BSD 3-Clause
 
-You may not use this file except in compliance with at least one of the above three licenses.
+All dependencies use permissive licenses compatible with Apache 2.0.
 
-See LICENSE.html, LICENSE.txt, COPYING.LIB, COPYING, and LICENSE-2.0.txt for complete license terms.
+## Authors
 
-## Author
+- David Beckett - Original nblex UTF-8 decoder (2013)
+- nblex 2.0 reimagined as Network & Buffer Log EXplorer (2025)
 
-**David Beckett**
-- Website: http://www.dajobe.org/
-- Bug Reports: http://bugs.librdf.org/
+## Support
 
-## Copyright
+- **Issues:** [GitHub Issues](https://github.com/dajobe/nblex/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/dajobe/nblex/discussions)
+- **Specification:** [SPEC.md](SPEC.md)
 
-Copyright (C) 2013, David Beckett
+## Acknowledgments
 
-## Contributing
+Inspired by:
+- [Zeek Network Monitor](https://zeek.org/) - Network analysis concepts
+- [Vector](https://vector.dev/) - High-performance log routing
+- [Sysdig](https://sysdig.com/) - System call + network correlation
 
-This project follows standard Autotools conventions. When contributing:
+---
 
-1. Maintain code style consistency
-2. Add tests for new features
-3. Update documentation as needed
-4. Ensure all compiler warnings are addressed
-
-## Links
-
-- Project website: http://www.dajobe.org/
-- Bug tracker: http://bugs.librdf.org/
+**Current development focus:** Implementing core event loop and basic log/network inputs. See [SPEC.md](SPEC.md) for architecture details and [CONTRIBUTING.md](CONTRIBUTING.md) to get involved!
