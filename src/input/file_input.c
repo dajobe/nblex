@@ -153,6 +153,9 @@ static void file_poll_timer_cb(uv_timer_t* handle) {
     return;
   }
 
+  /* Clear EOF flag to allow reading new content appended to the file */
+  clearerr(data->file);
+
   /* Read lines from file */
   char buffer[4096];
   while (fgets(buffer, sizeof(buffer), data->file) != NULL) {
