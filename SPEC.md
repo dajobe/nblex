@@ -298,23 +298,43 @@ nblex monitor \
 - [ ] TLS metadata extraction (SNI, versions, ciphers)
 - [ ] Custom Lua/JavaScript parsers
 
-#### Query Language
+#### Query Language: nQL (nblex Query Language)
 
-Simple query syntax for filtering and correlation:
+nblex uses a lightweight, filter-first query language (nQL) optimized for streaming log and network correlation. nQL is simpler than SQL, designed for real-time event processing, and builds on the existing filter expression syntax.
 
-```sql
--- Basic filtering and correlation queries
-SELECT *
-FROM events
-WHERE log.level >= ERROR
-  AND network.tcp.retransmits > 0
+**Core Syntax:**
 
--- Simple correlation queries
-CORRELATE
-  log.level == ERROR
-  WITH network.dst_port == 3306
-WITHIN 1 second
+```bash
+# Simple filtering (reuses existing filter syntax)
+log.level == ERROR
+log.level >= WARN AND network.port == 443
+log.message =~ /timeout/i
+
+# Correlation queries
+correlate log.level == ERROR with network.dst_port == 3306 within 100ms
+correlate log.status >= 500 with network.tcp.retransmits > 0 within 1s
+
+# Aggregation
+aggregate count() where log.level == ERROR
+aggregate count() by log.service where log.level == ERROR window 1m
+aggregate count(), avg(network.latency_ms) by log.endpoint window tumbling(1m)
+
+# Pipeline (chaining operations)
+log.level == ERROR | aggregate count() by log.service
+correlate log.level == ERROR with network.retransmits > 0 within 100ms | aggregate count()
+
+# Field selection
+show log.service, log.message, network.latency_ms where log.level == ERROR
+* where log.level == ERROR
 ```
+
+**Key Features:**
+
+- **Filter-first**: Filters are the primary operation (like LogQL)
+- **Pipeline-based**: Operations chain naturally with `|` (like PromQL)
+- **Correlation-native**: Built-in `correlate ... with ...` syntax
+- **Stream-optimized**: Designed for real-time event processing
+- **Leverages existing**: Reuses filter engine expression syntax
 
 #### Enhanced Correlation
 
@@ -377,15 +397,7 @@ nblex monitor \
   --logs /var/log/nginx/access.log \
   --logs /var/log/app/error.log \
   --network any \
-  --query '
-    CORRELATE
-      log.path == "/api/checkout"
-      WITH network.dst_port == 3306
-    WHERE
-      log.status >= 500
-      OR network.tcp.retransmits > 0
-    WINDOW 1 second
-  ' \
+  --query 'correlate log.path == "/api/checkout" with network.dst_port == 3306 within 1s where log.status >= 500 OR network.tcp.retransmits > 0' \
   --output json > investigation.jsonl
 ```
 
@@ -399,12 +411,7 @@ nblex monitor \
 nblex monitor \
   --logs /var/log/auth.log \
   --network eth0 \
-  --query '
-    CORRELATE
-      log.event == "ssh_login_success"
-      FOLLOWED BY network.bytes_sent > 100MB
-    WITHIN 5 minutes
-  ' \
+  --query 'correlate log.event == "ssh_login_success" with network.bytes_sent > 104857600 within 5m' \
   --output json > investigation.jsonl
 ```
 
@@ -418,19 +425,7 @@ nblex monitor \
 nblex monitor \
   --logs /var/log/app/access.log \
   --network lo \
-  --query '
-    SELECT
-      log.endpoint,
-      PERCENTILE(network.latency_ms, 95) as p95_latency,
-      COUNT(*) as requests
-    WHERE
-      log.method == "POST"
-      AND network.http.status == 200
-    GROUP BY log.endpoint
-    WINDOW tumbling(1 minute)
-    ORDER BY p95_latency DESC
-    LIMIT 10
-  ' \
+  --query 'log.method == POST AND network.http.status == 200 | aggregate count(), percentile(network.latency_ms, 95) by log.endpoint window 1m | top(10) by percentile(network.latency_ms, 95)' \
   --output prometheus
 ```
 
@@ -445,16 +440,7 @@ nblex monitor \
   --logs /var/log/app/queries.log \
   --network eth0 \
   --filter 'network.dst_port == 5432' \
-  --query '
-    CORRELATE
-      log.query_type == "SELECT"
-      WITH network.dst_ip
-    ENRICH
-      log.user,
-      log.table,
-      network.src_ip,
-      network.bytes_transferred
-  ' \
+  --query 'correlate log.query_type == "SELECT" with network.dst_ip | show log.user, log.table, network.src_ip, network.bytes_transferred' \
   --output postgresql://audit_db/access_log
 ```
 
@@ -468,16 +454,7 @@ nblex monitor \
 nblex monitor \
   --logs /var/log/service-*/app.log \
   --network any \
-  --query '
-    TRACE network.http.header.x-request-id
-    SHOW
-      log.service,
-      log.duration_ms,
-      network.latency_ms,
-      log.downstream_calls
-    WHERE
-      network.http.status >= 400
-  ' \
+  --query 'trace network.http.header.x-request-id show log.service, log.duration_ms, network.latency_ms, log.downstream_calls where network.http.status >= 400' \
   --format trace-timeline
 ```
 
@@ -511,7 +488,7 @@ nblex monitor --config /etc/nblex/config.yaml
 nblex analyze \
   --logs archive.log.gz \
   --pcap traffic.pcap \
-  --query @query.sql
+  --query @query.nql
 ```
 
 #### Query Mode
@@ -519,13 +496,13 @@ nblex analyze \
 ```bash
 # Interactive query shell
 nblex query
-nblex> SELECT * FROM logs WHERE level == ERROR LIMIT 10;
+nblex> log.level == ERROR limit 10
 
 # One-shot query
-nblex query "SELECT COUNT(*) FROM events WHERE network.port == 443"
+nblex query "aggregate count() where network.port == 443"
 
 # Load query from file
-nblex query --file queries/errors.sql --output csv
+nblex query --file queries/errors.nql --output csv
 ```
 
 #### Configuration Testing
@@ -1155,7 +1132,7 @@ ______________________________________________________________________
 1. **Query language design**
 
    - Custom DSL vs. SQL-like vs. existing language (PromQL, KQL)
-   - Decision: SQL-like for familiarity, with extensions for streaming
+   - Decision: nQL (nblex Query Language) - lightweight, filter-first DSL optimized for streaming correlation, inspired by LogQL and PromQL but simpler than SQL
 
 1. **State management**
 

@@ -145,17 +145,8 @@ nblex monitor \
   --filter 'log.status >= 500 OR network.tcp.retransmits > 0' \
   --output json
 
-# Real-time query
-nblex query "
-  SELECT
-    log.endpoint,
-    COUNT(*) as errors,
-    AVG(network.latency_ms) as avg_latency
-  FROM events
-  WHERE log.level == ERROR
-  GROUP BY log.endpoint
-  WINDOW tumbling(1 minute)
-"
+# Real-time query (using nQL)
+nblex query "aggregate count(), avg(network.latency_ms) by log.endpoint where log.level == ERROR window 1m"
 
 # Load from config file
 nblex monitor --config /etc/nblex/config.yaml
