@@ -7,6 +7,7 @@ Documentation for nblex is under development.
 - [README.md](../README.md) - Project overview and getting started
 - [SPEC.md](../SPEC.md) - Complete specification and architecture
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Development guide
+- [nql-spec.md](nql-spec.md) - nQL (nblex Query Language) specification
 - [competitive-analysis.md](competitive-analysis.md) - Comparison with open-source alternatives
 - [strategy.md](strategy.md) - Strategic positioning, feature priorities, and planning guidance
 
@@ -14,7 +15,6 @@ Documentation for nblex is under development.
 
 - **User Guide** - How to use nblex for monitoring and correlation
 - **API Reference** - Complete C API documentation
-- **Query Language** - nQL syntax and examples
 - **Configuration** - YAML configuration file reference
 - **Architecture** - Internal design and data flow
 - **Performance Tuning** - Optimization guide
