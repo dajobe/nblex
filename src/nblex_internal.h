@@ -239,6 +239,14 @@ filter_t* nblex_filter_new(const char* expression);
 void nblex_filter_free(filter_t* filter);
 int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
 
+/* nQL parser */
+typedef struct nql_query_s nql_query_t;
+nql_query_t* nql_parse(const char* query_str);
+void nql_free(nql_query_t* query);
+
+/* nQL executor */
+int nql_execute(const char* query_str, nblex_event* event, nblex_world* world);
+
 /* Configuration */
 typedef struct nblex_config_s nblex_config_t;
 nblex_config_t* nblex_config_load_yaml(const char* filename);

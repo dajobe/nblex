@@ -26,6 +26,7 @@ static void print_usage(const char* program) {
   printf("  -l, --logs PATH         Monitor log file(s)\n");
   printf("  -n, --network IFACE     Monitor network interface\n");
   printf("  -f, --filter EXPR       Filter expression\n");
+  printf("  -q, --query QUERY       nQL query expression\n");
   printf("  -o, --output FORMAT     Output format (json|file|http|metrics)\n");
   printf("  -O, --output-file PATH  Output file path (for file output)\n");
   printf("  -U, --output-url URL    Output URL (for http output)\n");
@@ -76,19 +77,23 @@ static void event_handler_multi(nblex_event* event, void* user_data) {
   }
 }
 
-static void event_handler_json(nblex_event* event, void* user_data) {
-  (void)user_data;  /* Unused */
-
-  if (!event) {
+static void event_handler_query(nblex_event* event, void* user_data) {
+  const char* query_str = (const char*)user_data;
+  
+  if (!event || !query_str) {
     return;
   }
-
-  /* Convert event to JSON and print */
-  char* json_str = nblex_event_to_json(event);
-  if (json_str) {
-    printf("%s\n", json_str);
-    fflush(stdout);
-    free(json_str);
+  
+  /* Execute query on event */
+  nblex_world* world = event->input ? event->input->world : NULL;
+  if (world && nql_execute(query_str, event, world)) {
+    /* Query matched - output event */
+    char* json_str = nblex_event_to_json(event);
+    if (json_str) {
+      printf("%s\n", json_str);
+      fflush(stdout);
+      free(json_str);
+    }
   }
 }
 
@@ -96,6 +101,7 @@ int main(int argc, char** argv) {
   const char* log_path = NULL;
   const char* network_iface = NULL;
   const char* filter = NULL;
+  const char* query = NULL;
   const char* output_format = "json";
   const char* output_file = NULL;
   const char* output_url = NULL;
@@ -105,6 +111,7 @@ int main(int argc, char** argv) {
     {"logs",       required_argument, 0, 'l'},
     {"network",   required_argument, 0, 'n'},
     {"filter",    required_argument, 0, 'f'},
+    {"query",     required_argument, 0, 'q'},
     {"output",    required_argument, 0, 'o'},
     {"output-file", required_argument, 0, 'O'},
     {"output-url", required_argument, 0, 'U'},
@@ -117,7 +124,7 @@ int main(int argc, char** argv) {
   int opt;
   int option_index = 0;
 
-  while ((opt = getopt_long(argc, argv, "l:n:f:o:O:U:c:vh",
+  while ((opt = getopt_long(argc, argv, "l:n:f:q:o:O:U:c:vh",
                             long_options, &option_index)) != -1) {
     switch (opt) {
       case 'l':
@@ -128,6 +135,9 @@ int main(int argc, char** argv) {
         break;
       case 'f':
         filter = optarg;
+        break;
+      case 'q':
+        query = optarg;
         break;
       case 'o':
         output_format = optarg;
@@ -287,7 +297,13 @@ int main(int argc, char** argv) {
     nblex_set_event_handler(world, event_handler_multi, NULL);
     printf("Writing metrics to: %s\n", output_file);
   } else if (strcmp(output_format, "json") == 0) {
-    nblex_set_event_handler(world, event_handler_json, NULL);
+    if (query) {
+      /* Use query handler */
+      nblex_set_event_handler(world, event_handler_query, (void*)query);
+      printf("Query: %s\n", query);
+    } else {
+      nblex_set_event_handler(world, event_handler_json, NULL);
+    }
   } else {
     fprintf(stderr, "Error: Unsupported output format '%s'\n", output_format);
     fprintf(stderr, "       Supported formats: json, file, http, metrics\n");

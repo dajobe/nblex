@@ -108,6 +108,7 @@ set(NBLEX_SOURCES
     src/core/nblex_event.c
     src/core/filter_engine.c
     src/core/config.c
+    src/core/nql_executor.c
 
     # Input
     src/input/file_input.c
@@ -122,6 +123,7 @@ set(NBLEX_SOURCES
     src/parsers/regex_parser.c
     src/parsers/http_parser.c
     src/parsers/dns_parser.c
+    src/parsers/nql_parser.c
 
     # Output
     src/output/json_output.c
