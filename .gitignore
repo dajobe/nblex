@@ -49,6 +49,9 @@ nblex/version.h
 *.log
 *.trs
 test-suite.log
+tests/test_*
+!tests/test_*.c
+!tests/test_*.sh
 
 # Coverage
 *.gcov
