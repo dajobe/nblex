@@ -26,8 +26,12 @@ target_link_libraries(test_parsers nblex ${CHECK_LIBRARY})
 add_executable(test_filters test_filters.c)
 target_link_libraries(test_filters nblex ${CHECK_LIBRARY})
 
+add_executable(test_nql test_nql.c)
+target_link_libraries(test_nql nblex ${CHECK_LIBRARY})
+
 # Register tests
 add_test(NAME parsers COMMAND test_parsers)
 add_test(NAME filters COMMAND test_filters)
+add_test(NAME nql COMMAND test_nql)
 
 message(STATUS "Unit tests configured")
