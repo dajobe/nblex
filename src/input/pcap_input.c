@@ -1,288 +1,299 @@
 /* -*- Mode: c; c-basic-offset: 2 -*-
  *
- * pcap_input.c - Network packet capture input
+ * pcap_input.c - PCAP network input agent
  *
  * Copyright (C) 2025
  * Licensed under the Apache License, Version 2.0
  */
 
-#include "../nblex_internal.h"
+#include <sys/types.h>  /* For BSD type definitions */
+#include <pcap.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <netinet/in.h>
+#include <unistd.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/if_ether.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 
-/* Forward declarations */
-static int pcap_input_start(nblex_input* input);
-static int pcap_input_stop(nblex_input* input);
-static void pcap_input_free_data(nblex_input* input);
-static void pcap_poll_cb(uv_poll_t* handle, int status, int events);
+#include "../nblex_internal.h"
 
-/* Virtual table for pcap input */
-static const nblex_input_vtable pcap_input_vtable = {
-  .name = "pcap",
-  .start = pcap_input_start,
-  .stop = pcap_input_stop,
-  .free = pcap_input_free_data
-};
+/* PCAP input agent state */
+typedef struct {
+    pcap_t* handle;
+    char* interface;
+    char* filter;
+    bpf_u_int32 net;
+    bpf_u_int32 mask;
+    int datalink;
+} pcap_input_data_t;
 
-nblex_input* nblex_input_pcap_new(nblex_world* world, const char* interface) {
-  if (!world || !interface) {
-    return NULL;
-  }
+/* Protocol dissector functions */
+static void dissect_tcp(const u_char* packet, json_t* event);
+static void dissect_udp(const u_char* packet, json_t* event);
+static void dissect_icmp(const u_char* packet, json_t* event);
 
-  nblex_input* input = nblex_input_new(world, NBLEX_INPUT_PCAP);
-  if (!input) {
-    return NULL;
-  }
+/* Packet handler callback */
+static void packet_handler(u_char* user, const struct pcap_pkthdr* header, const u_char* packet) {
+    nblex_input* input = (nblex_input*)user;
+    nblex_world* world = input->world;
+    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
 
-  nblex_pcap_input_data* data = calloc(1, sizeof(nblex_pcap_input_data));
-  if (!data) {
-    free(input);
-    return NULL;
-  }
+    /* Create event */
+    nblex_event* event = nblex_event_new(NBLEX_EVENT_NETWORK, input);
+    if (!event) {
+        return;
+    }
 
-  data->interface = nblex_strdup(interface);
-  if (!data->interface) {
-    free(data);
-    free(input);
-    return NULL;
-  }
+    json_t* json_data = json_object();
+    if (!json_data) {
+        nblex_event_free(event);
+        return;
+    }
 
-  data->pcap_handle = NULL;
-  data->capturing = false;
-  data->packets_captured = 0;
-  data->packets_dropped = 0;
+    /* Basic packet info */
+    json_object_set_new(json_data, "timestamp", json_real(header->ts.tv_sec + header->ts.tv_usec / 1000000.0));
+    json_object_set_new(json_data, "length", json_integer(header->len));
+    json_object_set_new(json_data, "captured_length", json_integer(header->caplen));
+    json_object_set_new(json_data, "interface", json_string(data->interface));
 
-  input->data = data;
-  input->vtable = &pcap_input_vtable;
+    /* Parse packet based on datalink type */
+    if (data->datalink == DLT_EN10MB) {
+        /* Ethernet frame */
+        struct ether_header* eth = (struct ether_header*)packet;
 
-  /* Add to world */
-  nblex_world_add_input(world, input);
+        /* Source and destination MAC addresses */
+        char src_mac[18], dst_mac[18];
+        snprintf(src_mac, sizeof(src_mac), "%02x:%02x:%02x:%02x:%02x:%02x",
+                eth->ether_shost[0], eth->ether_shost[1], eth->ether_shost[2],
+                eth->ether_shost[3], eth->ether_shost[4], eth->ether_shost[5]);
+        snprintf(dst_mac, sizeof(dst_mac), "%02x:%02x:%02x:%02x:%02x:%02x",
+                eth->ether_dhost[0], eth->ether_dhost[1], eth->ether_dhost[2],
+                eth->ether_dhost[3], eth->ether_dhost[4], eth->ether_dhost[5]);
 
-  return input;
-}
+        json_object_set_new(json_data, "ethernet_src", json_string(src_mac));
+        json_object_set_new(json_data, "ethernet_dst", json_string(dst_mac));
+        json_object_set_new(json_data, "ethernet_type", json_integer(ntohs(eth->ether_type)));
 
-static int pcap_input_start(nblex_input* input) {
-  if (!input || !input->data) {
-    return -1;
-  }
+        /* Skip Ethernet header */
+        packet += sizeof(struct ether_header);
+        size_t remaining = header->caplen - sizeof(struct ether_header);
 
-  nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
+        /* IP packet */
+        if (ntohs(eth->ether_type) == ETHERTYPE_IP && remaining >= sizeof(struct ip)) {
+            struct ip* ip = (struct ip*)packet;
 
-  char errbuf[PCAP_ERRBUF_SIZE];
+            char src_ip[INET_ADDRSTRLEN], dst_ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &ip->ip_src, src_ip, sizeof(src_ip));
+            inet_ntop(AF_INET, &ip->ip_dst, dst_ip, sizeof(dst_ip));
 
-  /* Open pcap handle on interface */
-  data->pcap_handle = pcap_open_live(data->interface,
-                                      65535,   /* snaplen */
-                                      1,       /* promiscuous mode */
-                                      100,     /* read timeout (ms) */
-                                      errbuf);
-  if (!data->pcap_handle) {
-    fprintf(stderr, "Error opening pcap on %s: %s\n", data->interface, errbuf);
-    return -1;
-  }
+            json_object_set_new(json_data, "ip_version", json_integer(ip->ip_v));
+            json_object_set_new(json_data, "ip_src", json_string(src_ip));
+            json_object_set_new(json_data, "ip_dst", json_string(dst_ip));
+            json_object_set_new(json_data, "ip_protocol", json_integer(ip->ip_p));
+            json_object_set_new(json_data, "ip_ttl", json_integer(ip->ip_ttl));
+            json_object_set_new(json_data, "ip_length", json_integer(ntohs(ip->ip_len)));
 
-  /* Set non-blocking mode */
-  if (pcap_setnonblock(data->pcap_handle, 1, errbuf) < 0) {
-    fprintf(stderr, "Error setting non-blocking mode: %s\n", errbuf);
-    pcap_close(data->pcap_handle);
-    data->pcap_handle = NULL;
-    return -1;
-  }
+            /* Skip IP header */
+            int ip_header_len = ip->ip_hl * 4;
+            packet += ip_header_len;
+            remaining -= ip_header_len;
 
-  /* Get file descriptor for polling */
-  data->pcap_fd = pcap_get_selectable_fd(data->pcap_handle);
-  if (data->pcap_fd < 0) {
-    fprintf(stderr, "Error: pcap_get_selectable_fd failed\n");
-    pcap_close(data->pcap_handle);
-    data->pcap_handle = NULL;
-    return -1;
-  }
-
-  /* Initialize libuv poll handle */
-  uv_poll_init(input->world->loop, &data->poll_handle, data->pcap_fd);
-  data->poll_handle.data = input;
-
-  /* Start polling for readable events */
-  uv_poll_start(&data->poll_handle, UV_READABLE, pcap_poll_cb);
-
-  data->capturing = true;
-
-  return 0;
-}
-
-static int pcap_input_stop(nblex_input* input) {
-  if (!input || !input->data) {
-    return -1;
-  }
-
-  nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
-
-  if (data->capturing) {
-    uv_poll_stop(&data->poll_handle);
-    uv_close((uv_handle_t*)&data->poll_handle, NULL);
-    data->capturing = false;
-  }
-
-  if (data->pcap_handle) {
-    pcap_close(data->pcap_handle);
-    data->pcap_handle = NULL;
-  }
-
-  return 0;
-}
-
-static void pcap_input_free_data(nblex_input* input) {
-  if (!input || !input->data) {
-    return;
-  }
-
-  nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
-
-  if (data->interface) {
-    free(data->interface);
-  }
-
-  free(data);
-}
-
-/* Process a single packet */
-static void process_packet(nblex_input* input, const struct pcap_pkthdr* header,
-                           const u_char* packet) {
-  nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
-  data->packets_captured++;
-
-  /* Parse Ethernet header (14 bytes) */
-  if (header->caplen < 14) {
-    return; /* Packet too small */
-  }
-
-  /* Skip Ethernet header, get IP header */
-  const struct ip* ip_header = (struct ip*)(packet + 14);
-
-  /* Verify we have at least IP header */
-  if (header->caplen < 14 + sizeof(struct ip)) {
-    return;
-  }
-
-  /* Only process IPv4 for now */
-  if (ip_header->ip_v != 4) {
-    return;
-  }
-
-  /* Create event */
-  nblex_event* event = nblex_event_new(NBLEX_EVENT_NETWORK, input);
-  if (!event) {
-    return;
-  }
-
-  /* Create JSON object for packet data */
-  json_t* packet_data = json_object();
-  if (!packet_data) {
-    nblex_event_free(event);
-    return;
-  }
-
-  /* Add basic packet information */
-  char src_ip[INET_ADDRSTRLEN];
-  char dst_ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &ip_header->ip_src, src_ip, INET_ADDRSTRLEN);
-  inet_ntop(AF_INET, &ip_header->ip_dst, dst_ip, INET_ADDRSTRLEN);
-
-  json_object_set_new(packet_data, "src_ip", json_string(src_ip));
-  json_object_set_new(packet_data, "dst_ip", json_string(dst_ip));
-  json_object_set_new(packet_data, "protocol", json_integer(ip_header->ip_p));
-  json_object_set_new(packet_data, "length", json_integer(ntohs(ip_header->ip_len)));
-
-  /* Parse TCP/UDP ports if available */
-  int ip_header_len = ip_header->ip_hl * 4;
-  const u_char* transport_header = packet + 14 + ip_header_len;
-
-  if (ip_header->ip_p == IPPROTO_TCP) {
-    if (header->caplen >= 14 + ip_header_len + sizeof(struct tcphdr)) {
-      const struct tcphdr* tcp = (struct tcphdr*)transport_header;
-      uint16_t src_port = ntohs(tcp->th_sport);
-      uint16_t dst_port = ntohs(tcp->th_dport);
-
-      json_object_set_new(packet_data, "protocol_name", json_string("TCP"));
-      json_object_set_new(packet_data, "src_port", json_integer(src_port));
-      json_object_set_new(packet_data, "dst_port", json_integer(dst_port));
-
-      /* Try to parse HTTP if on common HTTP ports */
-      int is_http_port = (src_port == 80 || dst_port == 80 ||
-                         src_port == 8080 || dst_port == 8080 ||
-                         src_port == 8000 || dst_port == 8000 ||
-                         src_port == 3000 || dst_port == 3000);
-
-      if (is_http_port) {
-        /* Calculate TCP header length and payload offset */
-        int tcp_header_len = ((tcp->th_off) * 4);
-        size_t tcp_payload_offset = 14 + ip_header_len + tcp_header_len;
-
-        if (header->caplen > tcp_payload_offset) {
-          const u_char* tcp_payload = packet + tcp_payload_offset;
-          size_t tcp_payload_len = header->caplen - tcp_payload_offset;
-
-          /* Try to parse as HTTP */
-          json_t* http_data = nblex_parse_http(tcp_payload, tcp_payload_len);
-          if (http_data) {
-            json_object_set_new(packet_data, "http", http_data);
-          }
+            /* Transport layer */
+            switch (ip->ip_p) {
+                case IPPROTO_TCP:
+                    if (remaining >= sizeof(struct tcphdr)) {
+                        dissect_tcp(packet, json_data);
+                    }
+                    break;
+                case IPPROTO_UDP:
+                    if (remaining >= sizeof(struct udphdr)) {
+                        dissect_udp(packet, json_data);
+                    }
+                    break;
+                case IPPROTO_ICMP:
+                    if (remaining >= sizeof(struct icmp)) {
+                        dissect_icmp(packet, json_data);
+                    }
+                    break;
+            }
         }
-      }
     }
-  } else if (ip_header->ip_p == IPPROTO_UDP) {
-    if (header->caplen >= 14 + ip_header_len + sizeof(struct udphdr)) {
-      const struct udphdr* udp = (struct udphdr*)transport_header;
-      json_object_set_new(packet_data, "protocol_name", json_string("UDP"));
-      json_object_set_new(packet_data, "src_port", json_integer(ntohs(udp->uh_sport)));
-      json_object_set_new(packet_data, "dst_port", json_integer(ntohs(udp->uh_dport)));
-    }
-  } else {
-    json_object_set_new(packet_data, "protocol_name", json_string("OTHER"));
-  }
 
-  event->data = packet_data;
+    /* Set event data */
+    event->data = json_data;
 
-  /* Emit event */
-  nblex_event_emit(input->world, event);
+    /* Emit event */
+    nblex_event_emit(world, event);
+
+    /* Clean up */
+    nblex_event_free(event);
 }
 
-static void pcap_poll_cb(uv_poll_t* handle, int status, int events) {
-  if (status < 0) {
-    fprintf(stderr, "Poll error: %s\n", uv_strerror(status));
-    return;
-  }
+/* TCP dissector */
+static void dissect_tcp(const u_char* packet, json_t* event) {
+    struct tcphdr* tcp = (struct tcphdr*)packet;
 
-  if (!(events & UV_READABLE)) {
-    return;
-  }
+    json_object_set_new(event, "protocol", json_string("tcp"));
+    json_object_set_new(event, "tcp_src_port", json_integer(ntohs(tcp->th_sport)));
+    json_object_set_new(event, "tcp_dst_port", json_integer(ntohs(tcp->th_dport)));
+    json_object_set_new(event, "tcp_seq", json_integer(ntohl(tcp->th_seq)));
+    json_object_set_new(event, "tcp_ack", json_integer(ntohl(tcp->th_ack)));
 
-  nblex_input* input = (nblex_input*)handle->data;
-  if (!input || !input->data) {
-    return;
-  }
+    /* TCP flags */
+    json_object_set_new(event, "tcp_flags_fin", json_boolean(tcp->th_flags & TH_FIN));
+    json_object_set_new(event, "tcp_flags_syn", json_boolean(tcp->th_flags & TH_SYN));
+    json_object_set_new(event, "tcp_flags_rst", json_boolean(tcp->th_flags & TH_RST));
+    json_object_set_new(event, "tcp_flags_psh", json_boolean(tcp->th_flags & TH_PUSH));
+    json_object_set_new(event, "tcp_flags_ack", json_boolean(tcp->th_flags & TH_ACK));
+    json_object_set_new(event, "tcp_flags_urg", json_boolean(tcp->th_flags & TH_URG));
+    json_object_set_new(event, "tcp_flags_ece", json_boolean(tcp->th_flags & TH_ECE));
+    json_object_set_new(event, "tcp_flags_cwr", json_boolean(tcp->th_flags & TH_CWR));
 
-  nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
-  if (!data->pcap_handle) {
-    return;
-  }
-
-  /* Process available packets (non-blocking) */
-  struct pcap_pkthdr* header;
-  const u_char* packet;
-  int result;
-
-  while ((result = pcap_next_ex(data->pcap_handle, &header, &packet)) == 1) {
-    process_packet(input, header, packet);
-  }
-
-  if (result == -1) {
-    fprintf(stderr, "Error reading packet: %s\n", pcap_geterr(data->pcap_handle));
-  }
+    json_object_set_new(event, "tcp_window", json_integer(ntohs(tcp->th_win)));
+    json_object_set_new(event, "tcp_checksum", json_integer(ntohs(tcp->th_sum)));
+    json_object_set_new(event, "tcp_urgent", json_integer(ntohs(tcp->th_urp)));
 }
+
+/* UDP dissector */
+static void dissect_udp(const u_char* packet, json_t* event) {
+    struct udphdr* udp = (struct udphdr*)packet;
+
+    json_object_set_new(event, "protocol", json_string("udp"));
+    json_object_set_new(event, "udp_src_port", json_integer(ntohs(udp->uh_sport)));
+    json_object_set_new(event, "udp_dst_port", json_integer(ntohs(udp->uh_dport)));
+    json_object_set_new(event, "udp_length", json_integer(ntohs(udp->uh_ulen)));
+    json_object_set_new(event, "udp_checksum", json_integer(ntohs(udp->uh_sum)));
+}
+
+/* ICMP dissector */
+static void dissect_icmp(const u_char* packet, json_t* event) {
+    struct icmp* icmp = (struct icmp*)packet;
+
+    json_object_set_new(event, "protocol", json_string("icmp"));
+    json_object_set_new(event, "icmp_type", json_integer(icmp->icmp_type));
+    json_object_set_new(event, "icmp_code", json_integer(icmp->icmp_code));
+    json_object_set_new(event, "icmp_checksum", json_integer(ntohs(icmp->icmp_cksum)));
+}
+
+/* Create PCAP input agent */
+nblex_input* nblex_input_pcap_new(nblex_world* world, const char* interface) {
+    if (!world || !interface) {
+        return NULL;
+    }
+
+    nblex_input* input = nblex_input_new(world, NBLEX_INPUT_PCAP);
+    if (!input) {
+        return NULL;
+    }
+
+    pcap_input_data_t* data = calloc(1, sizeof(pcap_input_data_t));
+    if (!data) {
+        nblex_input_free(input);
+        return NULL;
+    }
+
+    data->interface = strdup(interface);
+    input->data = data;
+
+    return input;
+}
+
+/* Start PCAP input */
+static int pcap_input_start(nblex_input* input) {
+    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+    char errbuf[PCAP_ERRBUF_SIZE];
+
+    /* Open interface */
+    data->handle = pcap_open_live(
+        data->interface,
+        65535,              /* snapshot length */
+        1,                  /* promiscuous mode */
+        1000,               /* timeout */
+        errbuf
+    );
+
+    if (!data->handle) {
+        fprintf(stderr, "Error opening interface %s: %s\n", data->interface, errbuf);
+        return -1;
+    }
+
+    /* Get network info */
+    if (pcap_lookupnet(data->interface, &data->net, &data->mask, errbuf) != 0) {
+        fprintf(stderr, "Warning: Could not get network info for %s: %s\n", data->interface, errbuf);
+        data->net = 0;
+        data->mask = 0;
+    }
+
+    /* Get datalink type */
+    data->datalink = pcap_datalink(data->handle);
+
+    /* Compile and set filter */
+    if (data->filter) {
+        struct bpf_program fp;
+        if (pcap_compile(data->handle, &fp, data->filter, 0, data->net) != 0) {
+            fprintf(stderr, "Error compiling filter '%s': %s\n",
+                   data->filter, pcap_geterr(data->handle));
+            pcap_close(data->handle);
+            return -1;
+        }
+
+        if (pcap_setfilter(data->handle, &fp) != 0) {
+            fprintf(stderr, "Error setting filter: %s\n", pcap_geterr(data->handle));
+            pcap_freecode(&fp);
+            pcap_close(data->handle);
+            return -1;
+        }
+
+        pcap_freecode(&fp);
+    }
+
+    /* Start capture in separate thread */
+    if (pcap_loop(data->handle, -1, packet_handler, (u_char*)input) != 0) {
+        fprintf(stderr, "Error in pcap_loop: %s\n", pcap_geterr(data->handle));
+        pcap_close(data->handle);
+        return -1;
+    }
+
+    return 0;
+}
+
+/* Stop PCAP input */
+static int pcap_input_stop(nblex_input* input) {
+    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+
+    if (data->handle) {
+        pcap_breakloop(data->handle);
+        pcap_close(data->handle);
+        data->handle = NULL;
+    }
+
+    return 0;
+}
+
+/* Free PCAP input */
+static void pcap_input_free(nblex_input* input) {
+    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+
+    if (data) {
+        if (data->handle) {
+            pcap_close(data->handle);
+        }
+
+        free(data->interface);
+        free(data->filter);
+        free(data);
+    }
+}
+
+/* PCAP input vtable */
+static nblex_input_vtable pcap_input_vtable = {
+    .name = "pcap",
+    .start = pcap_input_start,
+    .stop = pcap_input_stop,
+    .free = pcap_input_free
+};

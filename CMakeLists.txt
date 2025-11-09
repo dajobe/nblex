@@ -45,22 +45,54 @@ endif()
 # Find required dependencies
 find_package(PkgConfig REQUIRED)
 
-# Core dependencies
-pkg_check_modules(LIBUV REQUIRED libuv)
-pkg_check_modules(JANSSON REQUIRED jansson)
-
-# Network dependencies
+# Find all required libraries
+find_library(LIBUV_LIBRARY uv REQUIRED)
+find_library(JANSSON_LIBRARY jansson REQUIRED)
 find_library(PCAP_LIBRARY pcap REQUIRED)
+find_library(CURL_LIBRARY curl REQUIRED)
+find_library(YAML_LIBRARY yaml REQUIRED)
+if(NOT LIBUV_LIBRARY)
+    message(FATAL_ERROR "libuv not found")
+endif()
+if(NOT JANSSON_LIBRARY)
+    message(FATAL_ERROR "libjansson not found")
+endif()
+if(NOT PCAP_LIBRARY)
+    message(FATAL_ERROR "libpcap not found")
+endif()
+if(NOT CURL_LIBRARY)
+    message(FATAL_ERROR "libcurl not found")
+endif()
+if(NOT YAML_LIBRARY)
+    message(FATAL_ERROR "libyaml not found")
+endif()
 
-# Optional dependencies (TODO: add later)
-# pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
+# Get include directories from pkg-config
+pkg_check_modules(LIBUV libuv)
+pkg_check_modules(JANSSON jansson)
+pkg_check_modules(PCRE2 libpcre2-8)
+pkg_check_modules(YAML yaml-0.1)
+
+if(LIBUV_FOUND)
+    include_directories(${LIBUV_INCLUDE_DIRS})
+else()
+    # Fallback - assume standard location
+    include_directories(/opt/homebrew/include)
+endif()
+
+if(JANSSON_FOUND)
+    include_directories(${JANSSON_INCLUDE_DIRS})
+else()
+    # Fallback - assume standard location
+    include_directories(/opt/homebrew/include)
+endif()
 
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${LIBUV_INCLUDE_DIRS}
-    ${JANSSON_INCLUDE_DIRS}
+    ${PCRE2_INCLUDE_DIRS}
+    ${YAML_INCLUDE_DIRS}
 )
 
 # Generate version header
@@ -74,21 +106,28 @@ set(NBLEX_SOURCES
     # Core
     src/core/nblex_world.c
     src/core/nblex_event.c
+    src/core/filter_engine.c
+    src/core/config.c
 
     # Input
     src/input/file_input.c
     src/input/pcap_input.c
     src/input/input_base.c
+    src/input/pcap_input.c
 
     # Parsers
     src/parsers/json_parser.c
+    src/parsers/logfmt_parser.c
+    src/parsers/syslog_parser.c
+    src/parsers/regex_parser.c
     src/parsers/http_parser.c
-
-    # Correlation
-    src/correlation/time_correlation.c
+    src/parsers/dns_parser.c
 
     # Output
     src/output/json_output.c
+    src/output/file_output.c
+    src/output/http_output.c
+    src/output/metrics_output.c
 
     # Utilities
     src/util/memory.c
@@ -105,9 +144,12 @@ set_target_properties(nblex PROPERTIES
 
 # Link dependencies
 target_link_libraries(nblex
-    ${LIBUV_LIBRARIES}
-    ${JANSSON_LIBRARIES}
+    ${LIBUV_LIBRARY}
+    ${JANSSON_LIBRARY}
+    ${PCRE2_LIBRARIES}
     ${PCAP_LIBRARY}
+    ${CURL_LIBRARY}
+    ${YAML_LIBRARY}
 )
 
 # Build CLI tool

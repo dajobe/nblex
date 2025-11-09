@@ -98,6 +98,31 @@ struct nblex_event_s {
 };
 
 /*
+ * Input configuration
+ */
+typedef struct nblex_input_config_s nblex_input_config_t;
+struct nblex_input_config_s {
+    char* name;
+    char* type;
+    char* path;           /* for file inputs */
+    char* interface;      /* for network inputs */
+    char* filter;         /* pcap filter */
+    char* format;         /* log format */
+};
+
+/*
+ * Output configuration
+ */
+typedef struct nblex_output_config_s nblex_output_config_t;
+struct nblex_output_config_s {
+    char* name;
+    char* type;
+    char* path;           /* for file outputs */
+    char* url;            /* for HTTP outputs */
+    char* format;         /* output format */
+};
+
+/*
  * File input data
  */
 typedef struct {

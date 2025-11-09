@@ -59,7 +59,8 @@ typedef enum {
   NBLEX_EVENT_LOG,          /* Log event */
   NBLEX_EVENT_NETWORK,      /* Network event */
   NBLEX_EVENT_CORRELATION,  /* Correlated event */
-  NBLEX_EVENT_ERROR         /* Error event */
+  NBLEX_EVENT_ERROR,        /* Error event */
+  NBLEX_EVENT_MAX           /* Maximum event type value */
 } nblex_event_type;
 
 /* Input types */
