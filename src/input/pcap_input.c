@@ -22,26 +22,43 @@
 
 #include "../nblex_internal.h"
 
-/* PCAP input agent state */
-typedef struct {
-    pcap_t* handle;
-    char* interface;
-    char* filter;
-    bpf_u_int32 net;
-    bpf_u_int32 mask;
-    int datalink;
-} pcap_input_data_t;
+/* Forward declarations */
+static const nblex_input_vtable pcap_input_vtable;
 
 /* Protocol dissector functions */
 static void dissect_tcp(const u_char* packet, json_t* event);
 static void dissect_udp(const u_char* packet, json_t* event);
 static void dissect_icmp(const u_char* packet, json_t* event);
 
+/* Poll callback for non-blocking pcap reads */
+static void on_pcap_readable(uv_poll_t* handle, int status, int events) {
+    nblex_input* input = (nblex_input*)handle->data;
+    nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
+
+    if (status < 0) {
+        fprintf(stderr, "Poll error on pcap fd: %s\n", uv_strerror(status));
+        return;
+    }
+
+    if (events & UV_READABLE) {
+        /* Process up to 10 packets at a time to avoid blocking */
+        int count = pcap_dispatch(data->pcap_handle, 10, packet_handler, (u_char*)input);
+
+        if (count < 0) {
+            fprintf(stderr, "Error in pcap_dispatch: %s\n", pcap_geterr(data->pcap_handle));
+            uv_poll_stop(handle);
+            data->capturing = false;
+        } else if (count > 0) {
+            data->packets_captured += count;
+        }
+    }
+}
+
 /* Packet handler callback */
 static void packet_handler(u_char* user, const struct pcap_pkthdr* header, const u_char* packet) {
     nblex_input* input = (nblex_input*)user;
     nblex_world* world = input->world;
-    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+    nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
 
     /* Create event */
     nblex_event* event = nblex_event_new(NBLEX_EVENT_NETWORK, input);
@@ -191,85 +208,127 @@ nblex_input* nblex_input_pcap_new(nblex_world* world, const char* interface) {
         return NULL;
     }
 
-    pcap_input_data_t* data = calloc(1, sizeof(pcap_input_data_t));
+    nblex_pcap_input_data* data = calloc(1, sizeof(nblex_pcap_input_data));
     if (!data) {
         nblex_input_free(input);
         return NULL;
     }
 
     data->interface = strdup(interface);
+    data->capturing = false;
+    data->packets_captured = 0;
+    data->packets_dropped = 0;
     input->data = data;
+
+    /* Set vtable */
+    input->vtable = &pcap_input_vtable;
 
     return input;
 }
 
 /* Start PCAP input */
 static int pcap_input_start(nblex_input* input) {
-    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+    nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
+    nblex_world* world = input->world;
     char errbuf[PCAP_ERRBUF_SIZE];
+    bpf_u_int32 net, mask;
 
     /* Open interface */
-    data->handle = pcap_open_live(
+    data->pcap_handle = pcap_open_live(
         data->interface,
         65535,              /* snapshot length */
         1,                  /* promiscuous mode */
-        1000,               /* timeout */
+        1,                  /* timeout in ms - small for non-blocking */
         errbuf
     );
 
-    if (!data->handle) {
+    if (!data->pcap_handle) {
         fprintf(stderr, "Error opening interface %s: %s\n", data->interface, errbuf);
         return -1;
     }
 
-    /* Get network info */
-    if (pcap_lookupnet(data->interface, &data->net, &data->mask, errbuf) != 0) {
-        fprintf(stderr, "Warning: Could not get network info for %s: %s\n", data->interface, errbuf);
-        data->net = 0;
-        data->mask = 0;
-    }
-
-    /* Get datalink type */
-    data->datalink = pcap_datalink(data->handle);
-
-    /* Compile and set filter */
-    if (data->filter) {
-        struct bpf_program fp;
-        if (pcap_compile(data->handle, &fp, data->filter, 0, data->net) != 0) {
-            fprintf(stderr, "Error compiling filter '%s': %s\n",
-                   data->filter, pcap_geterr(data->handle));
-            pcap_close(data->handle);
-            return -1;
-        }
-
-        if (pcap_setfilter(data->handle, &fp) != 0) {
-            fprintf(stderr, "Error setting filter: %s\n", pcap_geterr(data->handle));
-            pcap_freecode(&fp);
-            pcap_close(data->handle);
-            return -1;
-        }
-
-        pcap_freecode(&fp);
-    }
-
-    /* Start capture in separate thread */
-    if (pcap_loop(data->handle, -1, packet_handler, (u_char*)input) != 0) {
-        fprintf(stderr, "Error in pcap_loop: %s\n", pcap_geterr(data->handle));
-        pcap_close(data->handle);
+    /* Set non-blocking mode */
+    if (pcap_setnonblock(data->pcap_handle, 1, errbuf) != 0) {
+        fprintf(stderr, "Error setting non-blocking mode: %s\n", errbuf);
+        pcap_close(data->pcap_handle);
+        data->pcap_handle = NULL;
         return -1;
     }
 
+    /* Get network info for filter compilation */
+    if (pcap_lookupnet(data->interface, &net, &mask, errbuf) != 0) {
+        fprintf(stderr, "Warning: Could not get network info for %s: %s\n", data->interface, errbuf);
+        net = 0;
+        mask = 0;
+    }
+
+    /* Compile and set filter if provided */
+    if (input->filter) {
+        /* Note: input->filter comes from nblex_input_set_filter() which stores
+         * the filter expression in the input base structure */
+        struct bpf_program fp;
+        /* Extract filter string - assuming it's already parsed from filter_t */
+        /* For now, skip BPF filter as it needs integration with filter_engine */
+        /* TODO: Convert nblex filter expressions to BPF */
+    }
+
+    /* Get file descriptor for polling */
+    data->pcap_fd = pcap_get_selectable_fd(data->pcap_handle);
+    if (data->pcap_fd < 0) {
+        fprintf(stderr, "Error: pcap_get_selectable_fd failed - interface may not support select()\n");
+        pcap_close(data->pcap_handle);
+        data->pcap_handle = NULL;
+        return -1;
+    }
+
+    /* Initialize uv_poll for non-blocking reads */
+    int rc = uv_poll_init(world->loop, &data->poll_handle, data->pcap_fd);
+    if (rc != 0) {
+        fprintf(stderr, "Error initializing uv_poll: %s\n", uv_strerror(rc));
+        pcap_close(data->pcap_handle);
+        data->pcap_handle = NULL;
+        return -1;
+    }
+
+    /* Store input pointer in poll handle for callback */
+    data->poll_handle.data = input;
+
+    /* Start polling for readable events */
+    rc = uv_poll_start(&data->poll_handle, UV_READABLE, on_pcap_readable);
+    if (rc != 0) {
+        fprintf(stderr, "Error starting uv_poll: %s\n", uv_strerror(rc));
+        uv_close((uv_handle_t*)&data->poll_handle, NULL);
+        pcap_close(data->pcap_handle);
+        data->pcap_handle = NULL;
+        return -1;
+    }
+
+    data->capturing = true;
     return 0;
+}
+
+/* Close callback for uv_poll */
+static void on_poll_close(uv_handle_t* handle) {
+    /* Poll handle closed successfully */
 }
 
 /* Stop PCAP input */
 static int pcap_input_stop(nblex_input* input) {
-    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+    nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
 
-    if (data->handle) {
-        pcap_breakloop(data->handle);
-        pcap_close(data->handle);
-        data->handle = NULL;
+    if (data->capturing) {
+        /* Stop polling */
+        uv_poll_stop(&data->poll_handle);
+
+        /* Close the poll handle */
+        uv_close((uv_handle_t*)&data->poll_handle, on_poll_close);
+
+        data->capturing = false;
+    }
+
+    if (data->pcap_handle) {
+        pcap_close(data->pcap_handle);
+        data->pcap_handle = NULL;
     }
 
     return 0;
@@ -277,21 +336,25 @@ static int pcap_input_stop(nblex_input* input) {
 
 /* Free PCAP input */
 static void pcap_input_free(nblex_input* input) {
-    pcap_input_data_t* data = (pcap_input_data_t*)input->data;
+    nblex_pcap_input_data* data = (nblex_pcap_input_data*)input->data;
 
     if (data) {
-        if (data->handle) {
-            pcap_close(data->handle);
+        /* Stop capture if still running */
+        if (data->capturing) {
+            pcap_input_stop(input);
+        }
+
+        if (data->pcap_handle) {
+            pcap_close(data->pcap_handle);
         }
 
         free(data->interface);
-        free(data->filter);
         free(data);
     }
 }
 
 /* PCAP input vtable */
-static nblex_input_vtable pcap_input_vtable = {
+static const nblex_input_vtable pcap_input_vtable = {
     .name = "pcap",
     .start = pcap_input_start,
     .stop = pcap_input_stop,

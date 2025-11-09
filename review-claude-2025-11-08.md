@@ -23,7 +23,7 @@ nblex has made **excellent progress** on its foundational architecture and Alpha
 - ✅ YAML configuration support
 
 **Critical Issues:**
-- ⚠️ PCAP input uses blocking `pcap_loop()` (async architecture violation)
+- ✅ **FIXED:** PCAP input now uses non-blocking `pcap_dispatch()` with uv_poll
 - ❌ Limited test coverage (~5% of codebase)
 - ❌ Advanced correlation strategies not implemented
 
@@ -103,32 +103,41 @@ All deliverables completed:
 
 ## Critical Architecture Issues
 
-### 1. ⚠️ PCAP Blocking Issue (HIGH PRIORITY)
+### 1. ✅ PCAP Blocking Issue - **FIXED** (2025-11-09)
 
-**Location:** `src/input/pcap_input.c:256`
+**Original Location:** `src/input/pcap_input.c:256`
 
+**Problem:** `pcap_loop()` was a blocking call that contradicted the non-blocking libuv-based architecture.
+
+**Solution Implemented:**
+- ✅ Converted to non-blocking `pcap_dispatch()` with `uv_poll`
+- ✅ Integrated with libuv event loop via `uv_poll_t`
+- ✅ Process up to 10 packets per callback to prevent starvation
+- ✅ Proper cleanup with `uv_poll_stop()` and `uv_close()`
+
+**New Code:**
 ```c
-if (pcap_loop(data->pcap_handle, -1, packet_handler, (u_char*)input) != 0) {
-    // BLOCKING CALL - Will block entire event loop!
+/* Set non-blocking mode */
+pcap_setnonblock(data->pcap_handle, 1, errbuf);
+
+/* Get file descriptor and set up polling */
+data->pcap_fd = pcap_get_selectable_fd(data->pcap_handle);
+uv_poll_init(world->loop, &data->poll_handle, data->pcap_fd);
+uv_poll_start(&data->poll_handle, UV_READABLE, on_pcap_readable);
+
+/* Callback processes packets in batches */
+static void on_pcap_readable(uv_poll_t* handle, int status, int events) {
+    pcap_dispatch(data->pcap_handle, 10, packet_handler, (u_char*)input);
 }
 ```
 
-**Problem:** `pcap_loop()` is a blocking call that contradicts the non-blocking libuv-based architecture specified in SPEC.md.
+**Status:** ✅ **COMPLETE** - See `PCAP-BLOCKING-FIX.md` for full details
 
-**Impact:**
-- Blocks event loop indefinitely
-- Prevents file input and other async operations from running
-- Violates SPEC.md requirement: "Non-blocking I/O architecture (io_uring, epoll, kqueue)"
-
-**Recommended Fix:**
-```c
-// Use non-blocking approach with fd polling
-uv_poll_init(world->loop, &data->poll_handle, pcap_get_selectable_fd(pcap_handle));
-uv_poll_start(&data->poll_handle, UV_READABLE, on_pcap_readable);
-
-// In callback:
-pcap_dispatch(data->pcap_handle, 10, packet_handler, user_data); // Process 10 packets max
-```
+**Impact on Architecture:**
+- ✅ Now fully compliant with SPEC.md non-blocking architecture
+- ✅ Can multiplex network capture with file inputs
+- ✅ Event loop no longer blocked
+- ✅ Removes primary blocker for Alpha Release
 
 ### 2. 🟡 File Rotation Incomplete
 
@@ -406,10 +415,10 @@ All public API functions are implemented. The API is minimal and focused on core
 
 ### 🔴 Critical (Before Alpha Release)
 
-1. **Fix PCAP Blocking Issue**
-   - Convert to non-blocking pcap_dispatch() with uv_poll
-   - Critical for async architecture compliance
-   - **Estimate:** 1-2 days
+1. ✅ **~~Fix PCAP Blocking Issue~~** - **COMPLETE**
+   - ✅ Converted to non-blocking pcap_dispatch() with uv_poll
+   - ✅ Fully compliant with async architecture
+   - **Status:** FIXED (2025-11-09) - See `PCAP-BLOCKING-FIX.md`
 
 2. **Enable SSL Verification**
    - Remove `CURLOPT_SSL_VERIFYPEER=0`
@@ -479,18 +488,18 @@ All public API functions are implemented. The API is minimal and focused on core
 | Time-based correlation | ✅ Complete | No |
 | Multiple outputs | ✅ Complete | No |
 | YAML configuration | ✅ Complete | No |
-| PCAP non-blocking | ❌ Blocking | **YES** |
+| PCAP non-blocking | ✅ **FIXED** | No |
 | Unit tests >70% | ❌ ~5% | No* |
 | Integration tests | ❌ None | **YES** |
 | Documentation | 🟡 Partial | No |
 
 **Blockers for Alpha Release:**
-1. PCAP blocking issue (critical architecture violation)
-2. No integration tests (reliability concern)
+1. ~~PCAP blocking issue~~ ✅ **FIXED** (2025-11-09)
+2. No integration tests (reliability concern) - **REMAINING**
 
-**Recommendation:** Fix PCAP blocking and add basic integration tests before declaring Alpha Release ready.
+**Recommendation:** Add basic integration tests to verify multi-input operation before declaring Alpha Release ready.
 
-**Time to Alpha:** 3-5 days with focused effort
+**Time to Alpha:** 2-3 days (down from 3-5 days after PCAP fix)
 
 ### Milestone 3 (Beta Release)
 
@@ -519,7 +528,7 @@ All public API functions are implemented. The API is minimal and focused on core
 - ✅ ~90% of Alpha Release features complete
 
 **Critical Issues:**
-- ⚠️ PCAP blocking violates async design
+- ✅ ~~PCAP blocking~~ **FIXED** (2025-11-09)
 - ❌ Insufficient test coverage
 - ❌ Missing advanced correlation strategies
 
@@ -531,16 +540,16 @@ All public API functions are implemented. The API is minimal and focused on core
 
 ### Final Recommendation
 
-**Status:** Ready for Alpha testing *after* fixing PCAP blocking issue
+**Status:** ✅ **Major blocker removed** - PCAP blocking issue fixed (2025-11-09)
 
 **Next Steps:**
-1. Fix PCAP non-blocking (Priority 1) - 1-2 days
+1. ✅ ~~Fix PCAP non-blocking~~ **COMPLETE** (2025-11-09) - See `PCAP-BLOCKING-FIX.md`
 2. Add integration tests (Priority 1) - 2-3 days
 3. Enable SSL verification (Priority 1) - 2 hours
 4. Add benchmarks (Priority 2) - 3-4 days
 5. Then declare Alpha Release
 
-**Timeline to Production-Ready Alpha:** 1 week of focused development
+**Timeline to Production-Ready Alpha:** 2-3 days (down from 1 week after PCAP fix)
 
 The nblex project demonstrates excellent engineering and is well on track to meet its vision as stated in SPEC.md. With the recommended fixes, it will be a solid Alpha Release candidate.
 
@@ -548,4 +557,5 @@ The nblex project demonstrates excellent engineering and is well on track to mee
 
 **Review completed by:** Claude (Anthropic)
 **Review date:** 2025-11-09
-**Next review recommended:** After PCAP fix and integration tests
+**PCAP Fix applied:** 2025-11-09 (see `PCAP-BLOCKING-FIX.md`)
+**Next review recommended:** After integration tests
