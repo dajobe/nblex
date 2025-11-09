@@ -24,6 +24,7 @@
 
 /* Forward declarations */
 static const nblex_input_vtable pcap_input_vtable;
+static void packet_handler(u_char* user, const struct pcap_pkthdr* header, const u_char* packet);
 
 /* Protocol dissector functions */
 static void dissect_tcp(const u_char* packet, json_t* event);
@@ -246,6 +247,8 @@ static int pcap_input_start(nblex_input* input) {
         fprintf(stderr, "Error opening interface %s: %s\n", data->interface, errbuf);
         return -1;
     }
+
+    data->datalink = pcap_datalink(data->pcap_handle);
 
     /* Set non-blocking mode */
     if (pcap_setnonblock(data->pcap_handle, 1, errbuf) != 0) {

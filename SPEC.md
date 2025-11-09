@@ -302,6 +302,16 @@ nblex monitor \
 
 nblex uses a lightweight, filter-first query language (nQL) optimized for streaming log and network correlation. nQL is simpler than SQL, designed for real-time event processing, and builds on the existing filter expression syntax.
 
+**Current status (2025-11-09):**
+
+- ✅ Parser refactored with shared AST header and extended `nql_parse_ex` API
+- ✅ Executor updated to respect multi-stage pipelines
+- ✅ Unit tests expanded to cover additional parse/execute scenarios
+- ✅ Decision: derived query results will be emitted as synthetic `nblex_event` instances
+- ⬜ Implement aggregation state, windowing, and correlation outputs in executor
+- ⬜ Define and document derived-event payload schema for downstream outputs
+- ⬜ Extend tests to cover aggregates, correlations, and advanced pipelines end-to-end
+
 **Core Syntax:**
 
 ```bash
@@ -1038,6 +1048,7 @@ ______________________________________________________________________
 **Deliverables:**
 
 - [ ] Advanced correlation (ID-based, sequence detection)
+- [ ] Aggregation and correlation execution engine emitting derived events
 - [ ] Export to alerting systems (webhooks, HTTP endpoints)
 - [ ] Prometheus/OpenTelemetry export
 - [ ] Performance optimizations (SIMD, zero-copy)
@@ -1059,6 +1070,7 @@ ______________________________________________________________________
 **Deliverables:**
 
 - [ ] eBPF-based capture option
+- [ ] Mature nQL execution (window management, result schemas, fault handling)
 - [ ] Optional simple viewer for correlation visualization
 - [ ] Export to centralized systems (Kafka, NATS)
 - [ ] Export to storage systems (Elasticsearch, Loki, ClickHouse)
