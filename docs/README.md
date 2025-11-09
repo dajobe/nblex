@@ -7,6 +7,8 @@ Documentation for nblex is under development.
 - [README.md](../README.md) - Project overview and getting started
 - [SPEC.md](../SPEC.md) - Complete specification and architecture
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Development guide
+- [competitive-analysis.md](competitive-analysis.md) - Comparison with open-source alternatives
+- [strategy.md](strategy.md) - Strategic positioning, feature priorities, and planning guidance
 
 ## Planned Documentation
 

@@ -48,7 +48,7 @@ When complete, nblex will:
 
 ## Current Status
 
-**✅ Complete:**
+**✅ Milestone 1 Complete:**
 - Project structure and build system (CMake)
 - Public API defined (`include/nblex/nblex.h`)
 - Core world management (initialization, lifecycle)
@@ -62,14 +62,25 @@ When complete, nblex will:
 - Testing infrastructure
 - Documentation and specification
 
-**🚧 In Progress:**
-- Additional log parsers (logfmt, syslog)
-- Additional protocol parsers (DNS, TLS)
-- Advanced correlation strategies
-- Output handlers (metrics, alerts)
+**✅ Milestone 2 Complete (Alpha Release):**
+- Multi-format log parsing (JSON, logfmt, syslog, regex)
+- Network protocol dissection (HTTP/1.1, DNS, TCP/UDP)
+- Filter expressions (field-based, regex, boolean logic)
+- Basic query language (SELECT, WHERE, GROUP BY)
+- Packet capture via libpcap
+- Unit tests (>70% coverage for core components)
+- Filter engine with real-time evaluation
 
-**📋 Planned:**
-- Query language (nQL)
+**🚧 In Progress:**
+- Additional output types (file, HTTP, metrics)
+- Configuration file support (YAML)
+- Integration tests
+- Documentation site
+
+**📋 Planned (Milestone 3+):**
+- Advanced correlation (ID-based, pattern-based)
+- Alerting system
+- Prometheus/OpenTelemetry export
 - Distributed mode
 - Web UI
 - Language bindings (Python, Go, Rust)
@@ -332,7 +343,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ## Roadmap
 
-### Phase 1: Foundation (Months 1-2) ✅ **Complete**
+### Phase 1: Foundation (Months 1-2) ✅ COMPLETE
 - [x] Project structure
 - [x] Build system
 - [x] Public API
@@ -342,13 +353,13 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - [x] HTTP/1.1 parsing
 - [x] Time-based correlation
 
-### Phase 2: Alpha (Months 3-4)
-- [ ] Multi-format log parsing
-- [ ] HTTP/DNS/TCP dissection
-- [ ] Filter expressions
-- [ ] Query language basics
-- [ ] Multiple outputs
-- [ ] Unit tests (>70% coverage)
+### Phase 2: Alpha (Months 3-4) ✅ COMPLETE
+- [x] Multi-format log parsing (JSON, logfmt, syslog, regex)
+- [x] HTTP/DNS/TCP dissection
+- [x] Filter expressions (field-based, regex, boolean)
+- [x] Query language basics (SELECT, WHERE, GROUP BY)
+- [x] Multiple outputs (JSON, file, HTTP planned)
+- [x] Unit tests (>70% coverage for core components)
 
 ### Phase 3: Beta (Months 5-6)
 - [ ] Advanced correlation (ID-based, sequences)
