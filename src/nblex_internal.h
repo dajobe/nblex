@@ -11,11 +11,13 @@
 
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE
+#define _DARWIN_C_SOURCE
 
 #include "nblex/nblex.h"
 #include <pthread.h>
 #include <uv.h>
 #include <jansson.h>
+#include <sys/types.h>
 #include <pcap.h>
 #include <stdbool.h>
 #include <stdint.h>

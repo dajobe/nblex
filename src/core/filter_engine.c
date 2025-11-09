@@ -46,9 +46,9 @@ typedef struct {
         int int_val;
         double float_val;
         int bool_val;
-        pcre2_code* regex_val;
-        pcre2_match_data* match_data;
     } value;
+    pcre2_code* regex_code;
+    pcre2_match_data* regex_match_data;
 } filter_expr_t;
 
 /* Filter node */
@@ -244,6 +244,7 @@ static filter_node_t* parse_filter_expr(const char** expr) {
         pos += 5;
     } else if (op == FILTER_OP_MATCH || op == FILTER_OP_NMATCH) {
         /* Regex pattern */
+        expr_data->value_type = JSON_STRING;
         const char* pattern_start = pos;
         while (*pos && !isspace(*pos)) {
             pos++;
@@ -257,7 +258,7 @@ static filter_node_t* parse_filter_expr(const char** expr) {
 
             int error_code;
             PCRE2_SIZE error_offset;
-            expr_data->value.regex_val = pcre2_compile(
+            expr_data->regex_code = pcre2_compile(
                 (PCRE2_SPTR)pattern,
                 PCRE2_ZERO_TERMINATED,
                 PCRE2_UTF | PCRE2_UCP,
@@ -266,9 +267,9 @@ static filter_node_t* parse_filter_expr(const char** expr) {
                 NULL
             );
 
-            if (expr_data->value.regex_val) {
-                expr_data->value.match_data = pcre2_match_data_create_from_pattern(
-                    expr_data->value.regex_val, NULL
+            if (expr_data->regex_code) {
+                expr_data->regex_match_data = pcre2_match_data_create_from_pattern(
+                    expr_data->regex_code, NULL
                 );
             }
 
@@ -434,14 +435,14 @@ static int evaluate_filter_expr(const filter_expr_t* expr, const json_t* event) 
 
         case FILTER_OP_MATCH:
         case FILTER_OP_NMATCH:
-            if (field_type == JSON_STRING && expr->value.regex_val) {
+            if (field_type == JSON_STRING && expr->regex_code) {
                 const char* str = json_string_value(field_value);
                 int rc = pcre2_match(
-                    expr->value.regex_val,
+                    expr->regex_code,
                     (PCRE2_SPTR)str,
                     strlen(str),
                     0, 0,
-                    expr->value.match_data,
+                    expr->regex_match_data,
                     NULL
                 );
                 int matches = rc >= 0;
@@ -492,12 +493,12 @@ static void free_filter_expr(filter_expr_t* expr) {
         free(expr->value.string_val);
     }
 
-    if (expr->value.regex_val) {
-        pcre2_code_free(expr->value.regex_val);
+    if (expr->regex_code) {
+        pcre2_code_free(expr->regex_code);
     }
 
-    if (expr->value.match_data) {
-        pcre2_match_data_free(expr->value.match_data);
+    if (expr->regex_match_data) {
+        pcre2_match_data_free(expr->regex_match_data);
     }
 
     free(expr);

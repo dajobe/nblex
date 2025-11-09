@@ -129,6 +129,9 @@ set(NBLEX_SOURCES
     src/output/http_output.c
     src/output/metrics_output.c
 
+    # Correlation
+    src/correlation/time_correlation.c
+
     # Utilities
     src/util/memory.c
     src/util/buffer.c
