@@ -398,6 +398,32 @@ show log.user, log.table, network.src_ip, network.bytes_transferred
 - [ ] Full aggregation implementation
 - [ ] Window state management
 
+### Query Result Delivery
+
+- ✅ Decision: Emit derived nQL results (aggregates, correlations, pipeline outputs) as synthetic `nblex_event` instances dispatched through the existing event handler chain.
+- ▶ Consequences:
+  - Requires a documented payload schema so outputs can distinguish derived vs raw events.
+  - Executor must maintain per-query state and emit events when windows close or correlations succeed.
+  - Back-pressure and buffering need to be considered to avoid flooding downstream handlers.
+
+## Test Coverage
+
+### Parser Tests – Current Gaps
+
+- Aggregation functions beyond `count()`/`avg()` (`sum`, `min`, `max`, `percentile`, `distinct`)
+- Window syntaxes not covered: `window 1m` shorthand and `window tumbling(...)`
+- Correlation error handling other than missing `with`
+- Complex pipelines (three-or-more stages, mixed query types)
+- Successful `nql_parse_ex` usage (only error path validated)
+
+### Execution Tests – Current Gaps
+
+- Correlation behaviour in `nql_execute`
+- Aggregation semantics beyond WHERE filtering (state, grouping, windowing)
+- Aggregations without a WHERE clause
+- Multi-stage pipelines beyond `filter | show`
+- Edge cases: empty events, missing fields, or failing stages
+
 ### Phase 3: Windowing (Planned)
 
 - [ ] Time-based windows (tumbling, sliding)
