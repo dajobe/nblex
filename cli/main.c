@@ -46,6 +46,21 @@ static file_output_t* file_output = NULL;
 static http_output_t* http_output = NULL;
 static metrics_output_t* metrics_output = NULL;
 
+static void event_handler_json(nblex_event* event, void* user_data) {
+  (void)user_data;
+
+  if (!event) {
+    return;
+  }
+
+  char* json_str = nblex_event_to_json(event);
+  if (json_str) {
+    printf("%s\n", json_str);
+    fflush(stdout);
+    free(json_str);
+  }
+}
+
 static void event_handler_multi(nblex_event* event, void* user_data) {
   (void)user_data;  /* Unused */
 
