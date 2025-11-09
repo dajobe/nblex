@@ -231,36 +231,38 @@ static filter_t* parse_filter_expr(nql_parser_t* parser,
   }
 
 done:
-  const char* end = current;
-  while (end > start && isspace((unsigned char)*(end - 1))) {
-    end--;
+  {
+    const char* end = current;
+    while (end > start && isspace((unsigned char)*(end - 1))) {
+      end--;
+    }
+
+    if (end == start) {
+      parser_set_error(parser, "expected filter expression");
+      return NULL;
+    }
+
+    size_t len = (size_t)(end - start);
+    char* buffer = malloc(len + 1);
+    if (!buffer) {
+      parser_set_error(parser, "out of memory");
+      return NULL;
+    }
+
+    memcpy(buffer, start, len);
+    buffer[len] = '\0';
+
+    filter_t* filter = nblex_filter_new(buffer);
+    free(buffer);
+
+    if (!filter) {
+      parser_set_error(parser, "invalid filter expression");
+      return NULL;
+    }
+
+    parser->pos = current;
+    return filter;
   }
-
-  if (end == start) {
-    parser_set_error(parser, "expected filter expression");
-    return NULL;
-  }
-
-  size_t len = (size_t)(end - start);
-  char* buffer = malloc(len + 1);
-  if (!buffer) {
-    parser_set_error(parser, "out of memory");
-    return NULL;
-  }
-
-  memcpy(buffer, start, len);
-  buffer[len] = '\0';
-
-  filter_t* filter = nblex_filter_new(buffer);
-  free(buffer);
-
-  if (!filter) {
-    parser_set_error(parser, "invalid filter expression");
-    return NULL;
-  }
-
-  parser->pos = current;
-  return filter;
 }
 
 static int add_agg_function(nql_parser_t* parser,

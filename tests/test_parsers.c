@@ -13,6 +13,9 @@
 json_t* nblex_parse_logfmt_line(const char* line);
 json_t* nblex_parse_syslog_line(const char* line);
 
+/* Test suite declaration */
+Suite* parsers_suite(void);
+
 START_TEST(test_json_parser) {
     /* Test valid JSON */
     json_t* result = nblex_parse_json_line("{\"level\":\"INFO\",\"message\":\"test\"}");

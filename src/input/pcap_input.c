@@ -269,10 +269,10 @@ static int pcap_input_start(nblex_input* input) {
     if (input->filter) {
         /* Note: input->filter comes from nblex_input_set_filter() which stores
          * the filter expression in the input base structure */
-        struct bpf_program fp;
         /* Extract filter string - assuming it's already parsed from filter_t */
         /* For now, skip BPF filter as it needs integration with filter_engine */
         /* TODO: Convert nblex filter expressions to BPF */
+        (void)input->filter; /* Suppress unused variable warning */
     }
 
     /* Get file descriptor for polling */

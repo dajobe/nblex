@@ -56,16 +56,6 @@ static char* parse_yaml_scalar(yaml_event_t* event) {
     return result;
 }
 
-/* Helper: Parse integer from YAML scalar */
-static int parse_yaml_int(yaml_event_t* event, int default_value) {
-    char* str = parse_yaml_scalar(event);
-    if (!str) {
-        return default_value;
-    }
-    int value = atoi(str);
-    free(str);
-    return value;
-}
 
 /* Load YAML configuration */
 nblex_config_t* nblex_config_load_yaml(const char* filename) {

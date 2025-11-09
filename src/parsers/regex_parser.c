@@ -14,13 +14,14 @@
 #include <string.h>
 
 /* Regex parser context */
-typedef struct {
+struct regex_parser_s {
     pcre2_code* regex;
     pcre2_match_data* match_data;
     int capture_count;
     char** field_names;
     int field_count;
-} regex_parser_t;
+};
+typedef struct regex_parser_s regex_parser_t;
 
 /* Initialize regex parser with pattern and field mapping */
 regex_parser_t* nblex_regex_parser_new(const char* pattern, const char** field_names, int field_count) {

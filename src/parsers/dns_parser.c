@@ -65,7 +65,7 @@ static char* extract_dns_name(const u_char* packet, size_t packet_len, size_t* o
             continue;
         }
 
-        if (ptr - name + len + 1 >= max_len) {
+        if ((size_t)(ptr - name) + len + 1 >= max_len) {
             break; /* Name too long */
         }
 
