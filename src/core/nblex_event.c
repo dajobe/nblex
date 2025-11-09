@@ -42,6 +42,15 @@ void nblex_event_emit(nblex_world* world, nblex_event* event) {
     return;
   }
 
+  /* Check filter if input has one */
+  if (event->input && event->input->filter) {
+    if (!nblex_filter_matches(event->input->filter, event)) {
+      /* Filter doesn't match, drop event */
+      nblex_event_free(event);
+      return;
+    }
+  }
+
   world->events_processed++;
 
   /* Process through correlation engine if available */

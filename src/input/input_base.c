@@ -8,6 +8,7 @@
 
 #include "../nblex_internal.h"
 #include <stdlib.h>
+#include <string.h>
 
 nblex_input* nblex_input_new(nblex_world* world, nblex_input_type type) {
   if (!world) {
@@ -24,6 +25,7 @@ nblex_input* nblex_input_new(nblex_world* world, nblex_input_type type) {
   input->format = NBLEX_FORMAT_JSON;  /* Default */
   input->vtable = NULL;
   input->data = NULL;
+  input->filter = NULL;  /* No filter by default */
 
   return input;
 }
@@ -31,6 +33,12 @@ nblex_input* nblex_input_new(nblex_world* world, nblex_input_type type) {
 void nblex_input_free(nblex_input* input) {
   if (!input) {
     return;
+  }
+
+  /* Free filter if any */
+  if (input->filter) {
+    nblex_filter_free(input->filter);
+    input->filter = NULL;
   }
 
   /* Call type-specific free */
@@ -50,13 +58,31 @@ int nblex_input_set_format(nblex_input* input, nblex_log_format format) {
   return 0;
 }
 
-int nblex_input_set_filter(nblex_input* input, const char* filter) {
+int nblex_input_set_filter(nblex_input* input, const char* filter_expr) {
   if (!input) {
     return -1;
   }
 
-  /* TODO: Parse and store filter expression */
-  (void)filter;  /* Unused for now */
+  if (!filter_expr || strlen(filter_expr) == 0) {
+    /* Clear existing filter */
+    if (input->filter) {
+      nblex_filter_free(input->filter);
+      input->filter = NULL;
+    }
+    return 0;
+  }
 
+  /* Parse and store filter expression */
+  filter_t* filter = nblex_filter_new(filter_expr);
+  if (!filter) {
+    return -1;
+  }
+
+  /* Free existing filter if any */
+  if (input->filter) {
+    nblex_filter_free(input->filter);
+  }
+
+  input->filter = filter;
   return 0;
 }

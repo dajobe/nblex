@@ -25,6 +25,7 @@
 
 /* Forward declarations */
 typedef struct nblex_input_vtable_s nblex_input_vtable;
+typedef struct filter_s filter_t;
 
 /*
  * World structure - main context
@@ -67,6 +68,9 @@ struct nblex_input_s {
 
   /* Input-specific data */
   void* data;
+
+  /* Filter for this input */
+  filter_t* filter;
 };
 
 /*
@@ -181,6 +185,7 @@ struct nblex_correlation_s {
 
   /* Timer for periodic cleanup */
   uv_timer_t cleanup_timer;
+  int timer_initialized;  /* Track if timer was initialized */
 
   /* Statistics */
   uint64_t correlations_found;
@@ -228,5 +233,33 @@ void nblex_correlation_process_event(nblex_correlation* corr, nblex_event* event
 
 /* JSON output */
 char* nblex_event_to_json_string(nblex_event* event);
+
+/* Filter engine */
+filter_t* nblex_filter_new(const char* expression);
+void nblex_filter_free(filter_t* filter);
+int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
+
+/* Configuration */
+typedef struct nblex_config_s nblex_config_t;
+nblex_config_t* nblex_config_load_yaml(const char* filename);
+void nblex_config_free(nblex_config_t* config);
+int nblex_config_apply(nblex_config_t* config, nblex_world* world);
+
+/* Output types - forward declarations */
+typedef struct file_output_s file_output_t;
+typedef struct http_output_s http_output_t;
+typedef struct metrics_output_s metrics_output_t;
+
+file_output_t* nblex_file_output_new(const char* path, const char* format);
+void nblex_file_output_free(file_output_t* output);
+int nblex_file_output_write(file_output_t* output, nblex_event* event);
+
+http_output_t* nblex_http_output_new(const char* url);
+void nblex_http_output_free(http_output_t* output);
+int nblex_http_output_write(http_output_t* output, nblex_event* event);
+
+metrics_output_t* nblex_metrics_output_new(const char* path, const char* format);
+void nblex_metrics_output_free(metrics_output_t* output);
+int nblex_metrics_output_write(metrics_output_t* output, nblex_event* event);
 
 #endif /* NBLEX_INTERNAL_H */
