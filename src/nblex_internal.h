@@ -26,6 +26,7 @@
 /* Forward declarations */
 typedef struct nblex_input_vtable_s nblex_input_vtable;
 typedef struct filter_s filter_t;
+typedef struct filter_node filter_node_t;
 
 /*
  * World structure - main context
@@ -203,6 +204,11 @@ void* nblex_realloc(void* ptr, size_t size);
 void nblex_free(void* ptr);
 char* nblex_strdup(const char* s);
 
+/* Buffer utilities */
+typedef struct nblex_buffer_s nblex_buffer;
+nblex_buffer* nblex_buffer_new(size_t initial_capacity);
+void nblex_buffer_free(nblex_buffer* buf);
+
 /* Events */
 nblex_event* nblex_event_new(nblex_event_type type, nblex_input* input);
 void nblex_event_free(nblex_event* event);
@@ -227,6 +233,21 @@ json_t* nblex_parse_json_line(const char* line);
 json_t* nblex_parse_http(const u_char* payload, size_t payload_len);
 json_t* nblex_parse_http_request(const u_char* payload, size_t payload_len);
 json_t* nblex_parse_http_response(const u_char* payload, size_t payload_len);
+json_t* nblex_parse_http_payload(const char* data, size_t data_len, int is_request);
+
+/* DNS parsing */
+json_t* nblex_parse_dns_payload(const u_char* data, size_t data_len);
+
+/* Log parsing */
+json_t* nblex_parse_logfmt_line(const char* line);
+json_t* nblex_parse_syslog_line(const char* line);
+
+/* Regex parser */
+struct regex_parser_s;
+typedef struct regex_parser_s regex_parser_t;
+regex_parser_t* nblex_regex_parser_new(const char* pattern, const char** field_names, int field_count);
+void nblex_regex_parser_free(regex_parser_t* parser);
+json_t* nblex_regex_parser_parse(regex_parser_t* parser, const char* line);
 
 /* Correlation */
 int nblex_correlation_start(nblex_correlation* corr);
@@ -239,6 +260,7 @@ char* nblex_event_to_json_string(nblex_event* event);
 filter_t* nblex_filter_new(const char* expression);
 void nblex_filter_free(filter_t* filter);
 int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
+filter_node_t* parse_filter_full(const char* expr);
 
 /* nQL parser */
 typedef struct nql_query_s nql_query_t;
@@ -254,6 +276,9 @@ typedef struct nblex_config_s nblex_config_t;
 nblex_config_t* nblex_config_load_yaml(const char* filename);
 void nblex_config_free(nblex_config_t* config);
 int nblex_config_apply(nblex_config_t* config, nblex_world* world);
+const char* nblex_config_get_string(nblex_config_t* config, const char* key);
+int nblex_config_get_int(nblex_config_t* config, const char* key, int default_value);
+size_t nblex_config_get_size(nblex_config_t* config, const char* key, size_t default_value);
 
 /* Output types - forward declarations */
 typedef struct file_output_s file_output_t;
@@ -263,13 +288,18 @@ typedef struct metrics_output_s metrics_output_t;
 file_output_t* nblex_file_output_new(const char* path, const char* format);
 void nblex_file_output_free(file_output_t* output);
 int nblex_file_output_write(file_output_t* output, nblex_event* event);
+void nblex_file_output_set_rotation(file_output_t* output, int max_size_mb, int max_age_days, int max_count);
 
 http_output_t* nblex_http_output_new(const char* url);
 void nblex_http_output_free(http_output_t* output);
 int nblex_http_output_write(http_output_t* output, nblex_event* event);
+void nblex_http_output_set_method(http_output_t* output, const char* method);
+void nblex_http_output_set_timeout(http_output_t* output, int timeout_seconds);
 
 metrics_output_t* nblex_metrics_output_new(const char* path, const char* format);
 void nblex_metrics_output_free(metrics_output_t* output);
 int nblex_metrics_output_write(metrics_output_t* output, nblex_event* event);
+int nblex_metrics_output_flush(metrics_output_t* output);
+void nblex_metrics_output_set_flush_interval(metrics_output_t* output, int interval_seconds);
 
 #endif /* NBLEX_INTERNAL_H */

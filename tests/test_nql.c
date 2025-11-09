@@ -10,6 +10,9 @@
 #include "../src/nblex_internal.h"
 #include "../src/parsers/nql_parser.h"
 
+/* Test suite declaration */
+Suite* nql_suite(void);
+
 static nblex_event* build_event_with_field(nblex_world** world_out,
                                            nblex_input** input_out,
                                            const char* field,

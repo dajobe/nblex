@@ -15,6 +15,9 @@ filter_t* nblex_filter_new(const char* expression);
 void nblex_filter_free(filter_t* filter);
 int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
 
+/* Test suite declaration */
+Suite* filters_suite(void);
+
 START_TEST(test_filter_equals) {
     /* Create world for testing */
     nblex_world* world = nblex_world_new();

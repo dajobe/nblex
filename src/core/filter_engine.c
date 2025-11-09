@@ -419,6 +419,7 @@ static int evaluate_filter_expr(const filter_expr_t* expr, const json_t* event) 
                     case FILTER_OP_LE: return field_val <= expr_val;
                     case FILTER_OP_GT: return field_val > expr_val;
                     case FILTER_OP_GE: return field_val >= expr_val;
+                    default: return 0; /* Should not happen in this branch */
                 }
             } else if ((field_type == JSON_REAL || field_type == JSON_INTEGER) &&
                       (expr->value_type == JSON_REAL || expr->value_type == JSON_INTEGER)) {
@@ -429,6 +430,7 @@ static int evaluate_filter_expr(const filter_expr_t* expr, const json_t* event) 
                     case FILTER_OP_LE: return field_val <= expr_val;
                     case FILTER_OP_GT: return field_val > expr_val;
                     case FILTER_OP_GE: return field_val >= expr_val;
+                    default: return 0; /* Should not happen in this branch */
                 }
             }
             return 0;
