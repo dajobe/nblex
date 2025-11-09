@@ -14,7 +14,7 @@
 #include <jansson.h>
 
 /* Metrics output state */
-typedef struct {
+struct metrics_output_s {
     FILE* file;
     char* path;
     char* format;           /* prometheus, statsd, etc. */
@@ -27,7 +27,8 @@ typedef struct {
     uint64_t events_by_input[10];  /* Assume max 10 inputs */
     uint64_t bytes_processed;
     uint64_t correlations_found;
-} metrics_output_t;
+};
+typedef struct metrics_output_s metrics_output_t;
 
 /* Flush metrics to file */
 int nblex_metrics_output_flush(metrics_output_t* output) {

@@ -13,14 +13,15 @@
 #include <curl/curl.h>
 
 /* HTTP output state */
-typedef struct {
+struct http_output_s {
     char* url;
     char* method;      /* POST, PUT, etc. */
     char* content_type;
     char* user_agent;
     int timeout_seconds;
     CURL* curl_handle;
-} http_output_t;
+};
+typedef struct http_output_s http_output_t;
 
 /* Free HTTP output */
 void nblex_http_output_free(http_output_t* output) {

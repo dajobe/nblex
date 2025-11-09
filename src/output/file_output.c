@@ -13,7 +13,7 @@
 #include <time.h>
 
 /* File output state */
-typedef struct {
+struct file_output_s {
     FILE* file;
     char* path;
     char* format;
@@ -22,7 +22,8 @@ typedef struct {
     int rotation_max_count;   /* Max number of files to keep */
     time_t last_rotation;
     long current_size;
-} file_output_t;
+};
+typedef struct file_output_s file_output_t;
 
 /* Rotate file if needed */
 static int rotate_file_if_needed(file_output_t* output) {
