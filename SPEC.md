@@ -10,7 +10,7 @@ ______________________________________________________________________
 
 ## Executive Summary
 
-**nblex** (Network & Buffer Log EXplorer) is a high-performance, real-time observability platform that uniquely combines application log analysis with network traffic monitoring. By correlating events across both layers, nblex provides unprecedented visibility into system behavior, enabling faster debugging, security detection, and performance optimization.
+**nblex** (Network & Buffer Log EXplorer) is a lightweight correlation tool that uniquely combines application log analysis with network traffic monitoring. By correlating events across both layers, nblex provides unprecedented visibility into system behavior, enabling faster debugging and performance optimization. Designed for ad-hoc debugging sessions, nblex complements existing observability platforms rather than replacing them.
 
 ### Key Differentiator
 
@@ -26,7 +26,7 @@ ______________________________________________________________________
 
 ### Vision
 
-Enable developers, SREs, and security teams to understand system behavior by unifying application-level insights (logs) with network-level reality (packets).
+Enable developers and SREs to understand system behavior by unifying application-level insights (logs) with network-level reality (packets) during debugging sessions and investigations.
 
 ### Primary Goals
 
@@ -34,7 +34,7 @@ Enable developers, SREs, and security teams to understand system behavior by uni
 1. **Correlation engine** - Link events across application and network layers
 1. **Non-blocking architecture** - Handle high-throughput environments efficiently
 1. **Developer-friendly** - Simple to deploy, query, and integrate
-1. **Production-ready** - Minimal overhead, reliable, observable
+1. **Reliable for production debugging** - Minimal overhead, stable for debugging sessions
 
 ### Non-Goals (v1.0)
 
@@ -190,7 +190,7 @@ Flexible export and action mechanisms:
 - **Files** - Append to files with rotation
 - **HTTP webhooks** - POST to external services
 - **Metrics exporters** - Prometheus, StatsD, OpenTelemetry
-- **Alert systems** - Slack, PagerDuty, email
+- **Export to alerting systems** - Slack, PagerDuty, email (via webhooks)
 - **Databases** - PostgreSQL, ClickHouse for storage
 - **Stream processors** - Kafka, NATS for downstream processing
 
@@ -300,21 +300,20 @@ nblex monitor \
 
 #### Query Language
 
-SQL-like query language for real-time analysis:
+Simple query syntax for filtering and correlation:
 
 ```sql
--- nblex Query Language (nQL)
-SELECT
-  log.service,
-  COUNT(*) as error_count,
-  AVG(network.latency_ms) as avg_latency
+-- Basic filtering and correlation queries
+SELECT *
 FROM events
-WHERE
-  log.level >= ERROR
+WHERE log.level >= ERROR
   AND network.tcp.retransmits > 0
-GROUP BY log.service
-WINDOW tumbling(1 minute)
-HAVING error_count > 10
+
+-- Simple correlation queries
+CORRELATE
+  log.level == ERROR
+  WITH network.dst_port == 3306
+WITHIN 1 second
 ```
 
 #### Enhanced Correlation
@@ -324,25 +323,13 @@ HAVING error_count > 10
 - [ ] Sequence detection (event A → event B → event C)
 - [ ] Anomaly detection (ML-based patterns)
 
-#### Alerting
+#### Export to Alerting Systems
 
-```yaml
-# alerts.yaml
-alerts:
-  - name: high_error_rate_with_network_issues
-    query: |
-      SELECT COUNT(*) as errors
-      FROM events
-      WHERE log.level == ERROR
-        AND network.tcp.retransmits > 5
-      WINDOW tumbling(1 minute)
-    condition: errors > 100
-    actions:
-      - type: slack
-        channel: "#alerts"
-      - type: webhook
-        url: https://oncall.example.com/alert
-```
+nblex exports correlated events to external alerting systems via webhooks and HTTP endpoints. Alerting logic and routing are handled by existing tools (PagerDuty, Slack, etc.), not built into nblex.
+
+- [ ] HTTP webhook output for alerting systems
+- [ ] Event filtering and routing to different endpoints
+- [ ] Integration with existing alerting infrastructure
 
 #### Metrics Export
 
@@ -359,27 +346,23 @@ alerts:
 - [ ] Lock-free data structures
 - [ ] Multi-core scaling
 
-#### Distributed Mode
+#### Export to Centralized Systems
 
-- [ ] Agent/server architecture
-- [ ] Distributed correlation across multiple hosts
-- [ ] Central query interface
-- [ ] Cluster coordination (etcd/Consul)
+- [ ] Export correlated events to centralized collection systems
+- [ ] Integration with existing event pipelines (Kafka, NATS)
+- [ ] Central query interface for accessing exported data
 
-#### Storage Integration
+#### Export to Storage Systems
 
-- [ ] Local ring buffer for replay
-- [ ] Optional persistence (SQLite, Parquet files)
-- [ ] Integration with existing log stores (Elasticsearch, Loki)
-- [ ] Clickhouse for fast analytics
+- [ ] Export to existing log stores (Elasticsearch, Loki, ClickHouse)
+- [ ] Local ring buffer for short-term replay during debugging sessions
+- [ ] Optional export to file formats (JSON, Parquet) for analysis
 
 #### Advanced Features
 
 - [ ] Live traffic sampling (analyze 10% of packets)
 - [ ] Encrypted log transport (TLS)
-- [ ] Multi-tenancy support
-- [ ] Role-based access control
-- [ ] Web UI for visualization
+- [ ] Optional simple viewer for real-time correlation visualization
 
 ______________________________________________________________________
 
@@ -408,9 +391,9 @@ nblex monitor \
 
 **Output shows:** Database connection resets (network) happening exactly when checkout errors occur (logs)
 
-### 2. Security Monitoring
+### 2. Security Debugging
 
-**Scenario:** Detect potential data exfiltration
+**Scenario:** Investigate potential data exfiltration during incident response
 
 ```bash
 nblex monitor \
@@ -422,7 +405,7 @@ nblex monitor \
       FOLLOWED BY network.bytes_sent > 100MB
     WITHIN 5 minutes
   ' \
-  --alert 'slack://security-alerts'
+  --output json > investigation.jsonl
 ```
 
 **Output shows:** Large data transfers following SSH logins
@@ -655,29 +638,6 @@ queries:
       - type: file
         path: /var/log/nblex/slow_requests.jsonl
 
-alerts:
-  - name: high_error_rate
-    query: |
-      SELECT COUNT(*) as count
-      FROM events
-      WHERE log.level == ERROR
-      WINDOW tumbling(1 minute)
-    condition: count > 100
-    actions:
-      - type: slack
-        webhook: ${SLACK_WEBHOOK_URL}
-        message: "High error rate detected: {{count}} errors/minute"
-
-      - type: webhook
-        url: https://oncall.example.com/alert
-        method: POST
-        body: |
-          {
-            "alert": "high_error_rate",
-            "severity": "warning",
-            "value": {{count}}
-          }
-
 outputs:
   - name: default_stdout
     type: stdout
@@ -694,6 +654,11 @@ outputs:
       max_size: 100MB
       max_age: 7d
       max_count: 10
+
+  - name: webhook_export
+    type: http
+    url: https://alerting.example.com/webhook
+    method: POST
 
 performance:
   worker_threads: 4
@@ -794,11 +759,15 @@ for row in results:
     print(f"{row.service}: {row.errors} errors")
 ```
 
-### REST API (Server Mode)
+### REST API (Programmatic Access)
+
+For programmatic access and integration with existing tools, nblex provides a REST API for querying and exporting correlated events. This enables integration with existing workflows and tools without requiring nblex to run as a long-running service.
 
 ```bash
-# Start server
-nblex serve --config /etc/nblex/config.yaml --port 8080
+# Query correlated events programmatically
+curl -X POST http://localhost:8080/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "SELECT * FROM events WHERE log.level == ERROR LIMIT 100"}'
 ```
 
 **Endpoints:**
@@ -807,7 +776,7 @@ nblex serve --config /etc/nblex/config.yaml --port 8080
 # Get current metrics
 GET /api/v1/metrics
 
-# Query events
+# Query events (programmatic access)
 POST /api/v1/query
 Content-Type: application/json
 
@@ -816,15 +785,12 @@ Content-Type: application/json
   "format": "json"
 }
 
-# Live event stream (Server-Sent Events)
+# Export event stream (for integration)
 GET /api/v1/stream?filter=log.level==ERROR
 
-# Manage correlations
+# Export correlations
 GET /api/v1/correlations
 POST /api/v1/correlations
-
-# Health check
-GET /health
 ```
 
 ______________________________________________________________________
@@ -1090,12 +1056,12 @@ ______________________________________________________________________
 
 ### Milestone 3: Beta Release (6 months)
 
-**Goal:** Production-ready for early adopters
+**Goal:** Usable for production debugging by early adopters
 
 **Deliverables:**
 
 - [ ] Advanced correlation (ID-based, sequence detection)
-- [ ] Alerting system with multiple backends
+- [ ] Export to alerting systems (webhooks, HTTP endpoints)
 - [ ] Prometheus/OpenTelemetry export
 - [ ] Performance optimizations (SIMD, zero-copy)
 - [ ] Integration tests
@@ -1106,7 +1072,7 @@ ______________________________________________________________________
 **Success Criteria:**
 
 - Meets performance targets (50K events/sec)
-- Used in production by 5+ organizations
+- Used for production debugging by 5+ organizations
 - No critical bugs for 1+ month
 
 ### Milestone 4: v1.0 Release (9 months)
@@ -1116,9 +1082,9 @@ ______________________________________________________________________
 **Deliverables:**
 
 - [ ] eBPF-based capture option
-- [ ] Web UI for visualization
-- [ ] Distributed mode (agent/server)
-- [ ] Storage integration (Elasticsearch, Loki, ClickHouse)
+- [ ] Optional simple viewer for correlation visualization
+- [ ] Export to centralized systems (Kafka, NATS)
+- [ ] Export to storage systems (Elasticsearch, Loki, ClickHouse)
 - [ ] Language bindings (Python, Go)
 - [ ] Security audit
 - [ ] Professional documentation
@@ -1126,7 +1092,7 @@ ______________________________________________________________________
 
 **Success Criteria:**
 
-- Feature parity with competitors in core areas
+- Feature parity with competitors in core correlation areas
 - 1,000+ GitHub stars
 - Active community (Discord, forum)
 - Clear path to v2.0
@@ -1138,7 +1104,7 @@ ______________________________________________________________________
 ### Technical Metrics
 
 - **Performance:** Sustained 100K events/sec throughput
-- **Reliability:** 99.9% uptime in production deployments
+- **Reliability:** Stable for debugging sessions, handles edge cases gracefully
 - **Accuracy:** >95% correlation accuracy (based on ground truth)
 - **Latency:** p95 < 10ms for event processing
 

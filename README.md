@@ -2,7 +2,7 @@
 
 **Status:** 🚧 Under active development - Foundation complete, core features in progress
 
-A unified observability platform that correlates application logs with network traffic in real-time, providing unprecedented visibility into system behavior.
+A lightweight correlation tool that correlates application logs with network traffic in real-time, providing unprecedented visibility into system behavior during debugging sessions.
 
 ## What is nblex?
 
@@ -16,6 +16,7 @@ nblex uniquely combines **log analysis** with **network monitoring** to answer q
 ### The Problem
 
 Traditional observability tools operate in silos:
+
 - **Log analyzers** (ELK, Splunk) don't see network events
 - **Network monitors** (Wireshark, tcpdump) don't see application context
 - **Correlation is manual** - you stare at dashboards trying to connect the dots
@@ -23,7 +24,8 @@ Traditional observability tools operate in silos:
 ### The Solution
 
 nblex automatically correlates events across both layers:
-```
+
+```text
 Application Layer (logs) + Network Layer (packets) = Complete Picture
 ```
 
@@ -42,13 +44,13 @@ When complete, nblex will:
    - Connection correlation (match network flows to processes)
 
 3. **Provide actionable insights**
-   - Real-time alerts when patterns match
    - SQL-like query language for ad-hoc analysis
-   - Export to metrics, dashboards, storage
+   - Export to existing tools (metrics, dashboards, storage)
 
 ## Current Status
 
 **✅ Milestone 1 Complete:**
+
 - Project structure and build system (CMake)
 - Public API defined (`include/nblex/nblex.h`)
 - Core world management (initialization, lifecycle)
@@ -63,6 +65,7 @@ When complete, nblex will:
 - Documentation and specification
 
 **✅ Milestone 2 Complete (Alpha Release):**
+
 - Multi-format log parsing (JSON, logfmt, syslog, regex)
 - Network protocol dissection (HTTP/1.1, DNS, TCP/UDP)
 - Filter expressions (field-based, regex, boolean logic)
@@ -76,16 +79,17 @@ When complete, nblex will:
 - Filter engine with real-time evaluation
 
 **🚧 In Progress:**
+
 - Integration tests
 - CLI tool fixes (naming conflicts)
 - Advanced correlation patterns
-- Web UI for real-time monitoring
 
 **📋 Planned (Milestone 3+):**
+
 - Advanced correlation (ID-based, pattern-based)
-- Alerting system
+- Export to alerting systems (webhooks, HTTP endpoints)
 - Prometheus/OpenTelemetry export
-- Distributed mode
+- Export to centralized systems (Kafka, NATS)
 - Language bindings (Python, Go, Rust)
 
 See [SPEC.md](SPEC.md) for complete specification and roadmap.
@@ -180,18 +184,19 @@ correlation:
     - type: time_based
       window: 100ms
 
-alerts:
-  - name: high_error_rate_with_network_issues
-    query: |
-      SELECT COUNT(*) as errors
-      FROM events
-      WHERE log.level == ERROR
-        AND network.tcp.retransmits > 5
-      WINDOW tumbling(1 minute)
-    condition: errors > 100
-    actions:
-      - type: slack
-        webhook: ${SLACK_WEBHOOK_URL}
+outputs:
+  - name: stdout
+    type: stdout
+    format: json
+
+  - name: prometheus
+    type: prometheus
+    listen: :9090
+
+  - name: webhook
+    type: http
+    url: https://alerting.example.com/webhook
+    method: POST
 ```
 
 ### C Library API
@@ -233,33 +238,39 @@ nblex_world_free(world);
 ## Use Cases
 
 ### 1. Debugging Production Issues
+
 Correlate application errors with network timeouts, retransmissions, or connection resets.
 
-### 2. Security Monitoring
-Detect data exfiltration by correlating SSH logins with large outbound transfers.
+### 2. Security Debugging
+
+Investigate potential security incidents by correlating SSH logins with large outbound transfers during incident response.
 
 ### 3. Performance Analysis
+
 Find slow API endpoints by measuring actual network latency, not just application-reported times.
 
 ### 4. Compliance & Audit
+
 Track database queries with full network context for comprehensive audit trails.
 
 ### 5. Microservices Tracing
+
 Follow requests across services by correlating logs and network flows with trace IDs.
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
 │                     nblex Core                          │
 │                                                         │
 │  Inputs → Stream Processor → Correlation → Outputs     │
 │  (logs,   (parse, filter,    (time, ID,    (json,     │
-│   pcap)    aggregate)         pattern)      alerts)    │
+│   pcap)    aggregate)         pattern)      exports)  │
 └─────────────────────────────────────────────────────────┘
 ```
 
 **Key Components:**
+
 - **Input Layer** - Log files, syslog, pcap, eBPF
 - **Stream Processor** - Parse, filter, normalize events
 - **Correlation Engine** - Match events across layers
@@ -278,7 +289,7 @@ See [SPEC.md](SPEC.md) for detailed architecture.
 
 ### Project Structure
 
-```
+```text
 nblex/
 ├── include/nblex/     # Public API headers
 ├── src/
@@ -320,6 +331,7 @@ make test
 ### Contributing
 
 We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
 - Development setup
 - Coding standards
 - Testing requirements
@@ -347,6 +359,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ## Roadmap
 
 ### Phase 1: Foundation (Months 1-2) ✅ COMPLETE
+
 - [x] Project structure
 - [x] Build system
 - [x] Public API
@@ -357,6 +370,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - [x] Time-based correlation
 
 ### Phase 2: Alpha (Months 3-4) ✅ COMPLETE
+
 - [x] Multi-format log parsing (JSON, logfmt, syslog, regex)
 - [x] HTTP/DNS/TCP dissection
 - [x] Filter expressions (field-based, regex, boolean)
@@ -365,20 +379,22 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - [x] Unit tests (>70% coverage for core components)
 
 ### Phase 3: Beta (Months 5-6)
+
 - [ ] Advanced correlation (ID-based, sequences)
-- [ ] Alerting system
+- [ ] Export to alerting systems (webhooks, HTTP endpoints)
 - [ ] Prometheus export
 - [ ] Performance optimizations
 - [ ] Integration tests
 - [ ] Docker images
 
 ### Phase 4: v1.0 (Months 7-9)
+
 - [ ] eBPF capture
-- [ ] Web UI
-- [ ] Distributed mode
-- [ ] Storage integrations
+- [ ] Optional simple viewer for correlation visualization
+- [ ] Export to centralized systems (Kafka, NATS)
+- [ ] Export to storage systems (Elasticsearch, Loki, ClickHouse)
 - [ ] Language bindings
-- [ ] Production deployments
+- [ ] Production debugging deployments
 
 See [SPEC.md](SPEC.md) for detailed milestones.
 
@@ -387,6 +403,7 @@ See [SPEC.md](SPEC.md) for detailed milestones.
 Licensed under the Apache License, Version 2.0. See [LICENSE-2.0.txt](LICENSE-2.0.txt) for details.
 
 **Dependency Licenses:**
+
 - libpcap - BSD 3-Clause
 - libuv - MIT
 - libjansson - MIT
@@ -408,6 +425,7 @@ All dependencies use permissive licenses compatible with Apache 2.0.
 ## Acknowledgments
 
 Inspired by:
+
 - [Zeek Network Monitor](https://zeek.org/) - Network analysis concepts
 - [Vector](https://vector.dev/) - High-performance log routing
 - [Sysdig](https://sysdig.com/) - System call + network correlation

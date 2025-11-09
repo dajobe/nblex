@@ -2,7 +2,7 @@
 
 ## What is nblex?
 
-nblex (Network & Buffer Log EXplorer) is an observability platform that correlates application logs with network traffic in real-time. It uniquely combines log analysis with network monitoring to provide insights that traditional tools operating in isolation cannot.
+nblex (Network & Buffer Log EXplorer) is a lightweight correlation tool that correlates application logs with network traffic in real-time. It uniquely combines log analysis with network monitoring to provide insights that traditional tools operating in isolation cannot.
 
 ## Architecture Overview
 
@@ -19,7 +19,7 @@ Input Agents → Processing Agents → Output Agents
 - **nblex World** - Central orchestration layer that manages all agents and the event loop
 - **Input Agents** - Collect data from various sources (log files, network interfaces, syslog, etc.)
 - **Processing Agents** - Parse, filter, and correlate events from different sources
-- **Output Agents** - Format and deliver processed events to destinations (JSON, metrics, alerts, etc.)
+- **Output Agents** - Format and deliver processed events to destinations (JSON, metrics, webhooks, etc.)
 
 ## Data Flow
 
@@ -40,7 +40,7 @@ Transform events through parsing, filtering, and correlation. The correlation en
 
 ### Output Agents (`src/output/`)
 
-Format and deliver events to destinations like JSON files, metrics systems (Prometheus), alerting systems, or HTTP endpoints.
+Format and deliver events to destinations like JSON files, metrics systems (Prometheus), export to alerting systems (via webhooks), or HTTP endpoints.
 
 ## Project Structure
 
