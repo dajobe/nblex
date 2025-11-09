@@ -1,4 +1,3 @@
-
 # nblex Specification
 
 ## Network & Buffer Log EXplorer
@@ -7,7 +6,7 @@
 **Status:** Draft
 **Last Updated:** 2025-11-08
 
----
+______________________________________________________________________
 
 ## Executive Summary
 
@@ -21,20 +20,21 @@ While traditional tools analyze logs OR network traffic in isolation, nblex corr
 - "Which API endpoints are logging errors but returning 200 OK?"
 - "Correlate database query logs with actual network traffic to MySQL"
 
----
+______________________________________________________________________
 
 ## Vision & Goals
 
 ### Vision
+
 Enable developers, SREs, and security teams to understand system behavior by unifying application-level insights (logs) with network-level reality (packets).
 
 ### Primary Goals
 
 1. **Real-time streaming analysis** - Process logs and network traffic as they occur
-2. **Correlation engine** - Link events across application and network layers
-3. **Non-blocking architecture** - Handle high-throughput environments efficiently
-4. **Developer-friendly** - Simple to deploy, query, and integrate
-5. **Production-ready** - Minimal overhead, reliable, observable
+1. **Correlation engine** - Link events across application and network layers
+1. **Non-blocking architecture** - Handle high-throughput environments efficiently
+1. **Developer-friendly** - Simple to deploy, query, and integrate
+1. **Production-ready** - Minimal overhead, reliable, observable
 
 ### Non-Goals (v1.0)
 
@@ -43,7 +43,7 @@ Enable developers, SREs, and security teams to understand system behavior by uni
 - Log aggregation from hundreds of sources (focus on quality over quantity)
 - Replace APM tools (complement, don't compete)
 
----
+______________________________________________________________________
 
 ## Architecture
 
@@ -98,9 +98,11 @@ Handles multiple data sources with unified streaming interface:
 - **Socket statistics** - `ss` style connection monitoring
 
 #### 2. Stream Processor
+
 Non-blocking event processing pipeline:
 
 **Parser Subsystem:**
+
 - **Schema detection** - Auto-detect JSON, logfmt, syslog, common formats
 - **Custom parsers** - Regex, Grok patterns, structured formats
 - **Network dissection** - HTTP, DNS, TLS, TCP/UDP headers
@@ -108,6 +110,7 @@ Non-blocking event processing pipeline:
 - **Encoding** - UTF-8, ASCII, with fallback handling
 
 **Filter Engine:**
+
 - **Field-based filtering** - `level >= ERROR`
 - **Regex matching** - `message =~ /timeout/i`
 - **Network filters** - `tcp.port == 443 AND http.status >= 500`
@@ -115,37 +118,44 @@ Non-blocking event processing pipeline:
 - **Performance** - Compiled filter expressions for speed
 
 **Aggregation Engine:**
+
 - **Windowing** - Tumbling, sliding, session windows
 - **Group by** - Aggregate by fields (service, status, etc.)
 - **Functions** - COUNT, SUM, AVG, MIN, MAX, PERCENTILE
 - **Top-K** - "Top 10 error messages in last hour"
 
 #### 3. Correlation Engine
+
 The unique value proposition of nblex:
 
 **Correlation Strategies:**
 
 1. **Time-based correlation** - Events within time windows
-   ```
+
+   ```text
    Match logs and packets within ±100ms
    ```
 
-2. **ID-based correlation** - Trace/request/transaction IDs
-   ```
+1. **ID-based correlation** - Trace/request/transaction IDs
+
+   ```text
    log.request_id == http.header.x-request-id
    ```
 
-3. **Connection correlation** - Match network flows to processes
-   ```
+1. **Connection correlation** - Match network flows to processes
+
+   ```text
    tcp.src_port == log.connection_info.port
    ```
 
-4. **Pattern correlation** - Behavioral patterns
-   ```
+1. **Pattern correlation** - Behavioral patterns
+
+   ```text
    "ERROR in logs" FOLLOWED BY "connection reset" within 5s
    ```
 
 **Correlation Output:**
+
 ```json
 {
   "correlation_id": "corr_abc123",
@@ -171,9 +181,11 @@ The unique value proposition of nblex:
 ```
 
 #### 4. Output Layer
+
 Flexible export and action mechanisms:
 
 **Output Types:**
+
 - **stdout/stderr** - Human-readable or JSON
 - **Files** - Append to files with rotation
 - **HTTP webhooks** - POST to external services
@@ -182,19 +194,21 @@ Flexible export and action mechanisms:
 - **Databases** - PostgreSQL, ClickHouse for storage
 - **Stream processors** - Kafka, NATS for downstream processing
 
----
+______________________________________________________________________
 
 ## Features
 
 ### Phase 1: Foundation (v0.1-0.3)
 
 #### Core Streaming Engine
+
 - [x] Non-blocking I/O architecture (io_uring, epoll, kqueue)
 - [x] Zero-copy buffer management where possible
 - [x] Backpressure handling
 - [x] Memory limits and quotas
 
 #### Basic Log Processing
+
 - [x] File tailing with rotation detection
 - [x] JSON log parsing
 - [x] Logfmt parsing
@@ -205,44 +219,53 @@ Flexible export and action mechanisms:
 ### Phase 2: Alpha Release (4 months)
 
 #### Multi-format Log Parsing
+
 - [x] JSON log parsing (completed)
 - [x] Logfmt parsing (completed)
 - [x] Syslog parsing (RFC 5424, RFC 3164) (completed)
 - [x] Custom regex patterns (completed)
 
 #### Network Protocol Dissection
+
 - [x] HTTP/1.1 request/response parsing (completed)
 - [x] DNS query/response parsing (completed)
 - [x] TCP/UDP header parsing (completed)
 
 #### Filter Engine
+
 - [x] Field-based filtering (level == "ERROR") (completed)
 - [x] Regex matching (=~ operator) (completed)
 - [x] Boolean logic (AND/OR/NOT) (completed)
 
 #### Basic Query Language
+
 - [x] SELECT, WHERE, GROUP BY (basic implementation)
 - [x] Field-based filtering (completed)
 
 #### Multiple Output Types
+
 - [x] JSON output (completed)
 - [ ] File output (TODO)
 - [ ] HTTP output (TODO)
 - [ ] Metrics output (Prometheus) (TODO)
 
 #### Configuration File Support
+
 - [ ] YAML configuration file support (TODO)
 
 #### Unit Tests
+
 - [x] Parser unit tests (>70% coverage for core parsers)
 - [x] Filter engine unit tests (basic coverage)
 - [ ] Integration tests (TODO)
 
 #### Documentation Site
+
 - [ ] API documentation (TODO)
 - [ ] User guide (TODO)
 
 #### Basic Network Monitoring
+
 - [x] Packet capture via libpcap
 - [x] TCP/UDP header parsing
 - [x] HTTP/1.1 request/response parsing
@@ -250,11 +273,13 @@ Flexible export and action mechanisms:
 - [x] Connection tracking (flow table)
 
 #### Simple Correlation
+
 - [x] Time-based correlation (configurable window)
 - [x] Basic filtering (log.level AND network.port)
 - [x] JSON output
 
 #### CLI Tool
+
 ```bash
 nblex monitor \
   --logs /var/log/app/*.log \
@@ -266,6 +291,7 @@ nblex monitor \
 ### Phase 2: Intelligence (v0.4-0.6)
 
 #### Advanced Parsing
+
 - [ ] Multi-line log support (stack traces, etc.)
 - [ ] Binary log formats (Protobuf, MessagePack)
 - [ ] HTTP/2 and gRPC dissection
@@ -273,6 +299,7 @@ nblex monitor \
 - [ ] Custom Lua/JavaScript parsers
 
 #### Query Language
+
 SQL-like query language for real-time analysis:
 
 ```sql
@@ -291,12 +318,14 @@ HAVING error_count > 10
 ```
 
 #### Enhanced Correlation
+
 - [ ] Request ID tracking across services
 - [ ] Process-to-connection mapping (via /proc, eBPF)
 - [ ] Sequence detection (event A → event B → event C)
 - [ ] Anomaly detection (ML-based patterns)
 
 #### Alerting
+
 ```yaml
 # alerts.yaml
 alerts:
@@ -316,6 +345,7 @@ alerts:
 ```
 
 #### Metrics Export
+
 - [ ] Prometheus exporter for dashboards
 - [ ] OpenTelemetry integration
 - [ ] Custom metric definitions
@@ -323,31 +353,35 @@ alerts:
 ### Phase 3: Scale (v0.7-1.0)
 
 #### Performance
+
 - [ ] eBPF-based capture (lower overhead than libpcap)
 - [ ] SIMD-optimized parsing
 - [ ] Lock-free data structures
 - [ ] Multi-core scaling
 
 #### Distributed Mode
+
 - [ ] Agent/server architecture
 - [ ] Distributed correlation across multiple hosts
 - [ ] Central query interface
 - [ ] Cluster coordination (etcd/Consul)
 
 #### Storage Integration
+
 - [ ] Local ring buffer for replay
 - [ ] Optional persistence (SQLite, Parquet files)
 - [ ] Integration with existing log stores (Elasticsearch, Loki)
 - [ ] Clickhouse for fast analytics
 
 #### Advanced Features
+
 - [ ] Live traffic sampling (analyze 10% of packets)
 - [ ] Encrypted log transport (TLS)
 - [ ] Multi-tenancy support
 - [ ] Role-based access control
 - [ ] Web UI for visualization
 
----
+______________________________________________________________________
 
 ## Use Cases
 
@@ -466,13 +500,14 @@ nblex monitor \
 
 **Output shows:** End-to-end request flow with timing at each hop
 
----
+______________________________________________________________________
 
 ## API Design
 
 ### Command-Line Interface
 
 #### Basic Usage
+
 ```bash
 # Monitor logs only
 nblex monitor --logs /var/log/app.log
@@ -497,6 +532,7 @@ nblex analyze \
 ```
 
 #### Query Mode
+
 ```bash
 # Interactive query shell
 nblex query
@@ -510,6 +546,7 @@ nblex query --file queries/errors.sql --output csv
 ```
 
 #### Configuration Testing
+
 ```bash
 # Validate configuration
 nblex config validate /etc/nblex/config.yaml
@@ -790,24 +827,27 @@ POST /api/v1/correlations
 GET /health
 ```
 
----
+______________________________________________________________________
 
 ## Technical Implementation
 
 ### Technology Stack
 
 **Core Language:** C (for performance, portability)
+
 - Targeting C11 (ISO/IEC 9899:2011) standard for modern features
 - Minimal dependencies for base functionality
 - Optional features can add dependencies
 
 **Required Dependencies:**
+
 - `libpcap` - Packet capture (or eBPF alternative)
 - `libuv` - Event loop, async I/O
 - `libjansson` - JSON parsing
 - `PCRE2` - Regular expressions
 
 **Optional Dependencies:**
+
 - `librdkafka` - Kafka output
 - `libpq` - PostgreSQL output
 - `hiredis` - Redis output
@@ -816,11 +856,13 @@ GET /health
 - `maxminddb` - GeoIP enrichment
 
 **Build System:**
+
 - CMake (replacing Autotools)
 - pkg-config support
 - Conan/vcpkg for dependency management
 
 **Bindings:**
+
 - Python (ctypes/CFFI)
 - Go (cgo)
 - Rust (bindgen)
@@ -831,6 +873,7 @@ GET /health
 Testing nblex presents unique challenges due to its dual nature (logs + network) and real-time requirements. A comprehensive multi-layered approach is essential:
 
 **Unit Testing:**
+
 - **Parser tests** - Test each log format parser with known inputs/outputs
 - **Protocol dissectors** - Test HTTP, DNS, TCP parsing with crafted packets
 - **Filter expressions** - Test boolean logic, field matching, regex
@@ -839,6 +882,7 @@ Testing nblex presents unique challenges due to its dual nature (logs + network)
 - **Coverage target:** >80% for core logic
 
 **Integration Testing:**
+
 - **End-to-end flows** - Inject logs + packets, verify correlated output
 - **Multiple input sources** - Test file + network simultaneously
 - **Output validation** - Verify JSON, metrics, alerts are correct
@@ -846,18 +890,21 @@ Testing nblex presents unique challenges due to its dual nature (logs + network)
 - **Framework:** Custom test harness + shell scripts
 
 **Synthetic Testing:**
+
 - **Traffic generation** - Use tcpreplay for packet injection
 - **Log generation** - Scripts to generate realistic log patterns
 - **Known scenarios** - Pre-recorded pcap + log files with expected correlations
 - **Example:** Error log at T+0ms, TCP RST at T+50ms → should correlate
 
 **Fuzzing:**
+
 - **Input fuzzing** - AFL or libFuzzer for parsers (UTF-8, JSON, HTTP, pcap)
 - **Protocol fuzzing** - Malformed packets, invalid log formats
 - **State fuzzing** - Random event sequences to find crashes
 - **Critical for security** - Parsers handle untrusted input
 
 **Performance Testing:**
+
 - **Benchmarks** - Measure throughput (events/sec) with real-world data
 - **Latency tests** - Measure p50/p95/p99 processing latency
 - **Load tests** - Sustained high throughput (24+ hours)
@@ -865,12 +912,14 @@ Testing nblex presents unique challenges due to its dual nature (logs + network)
 - **Tools:** Custom benchmark suite + perf
 
 **Real-world Testing:**
+
 - **Dogfooding** - Run nblex on its own logs/network
 - **Beta deployments** - Real production environments (with permission)
 - **Diverse environments** - Different log formats, traffic patterns, OS versions
 - **Feedback loop** - User reports inform test cases
 
 **Regression Testing:**
+
 - **Test corpus** - Collection of real-world logs + pcaps (anonymized)
 - **CI pipeline** - All tests run on every commit
 - **Platform matrix** - Linux (Ubuntu, RHEL, Alpine), macOS, BSDs
@@ -880,22 +929,28 @@ Testing nblex presents unique challenges due to its dual nature (logs + network)
 **Challenges & Mitigations:**
 
 1. **Challenge:** Timing-dependent correlation is hard to test deterministically
+
    - **Mitigation:** Mock time in tests, use synthetic timestamps
 
-2. **Challenge:** Network capture requires root privileges
+1. **Challenge:** Network capture requires root privileges
+
    - **Mitigation:** Use pre-captured pcap files for most tests, dedicated test VMs for live capture
 
-3. **Challenge:** Difficult to reproduce real-world correlation scenarios
+1. **Challenge:** Difficult to reproduce real-world correlation scenarios
+
    - **Mitigation:** Build corpus of real incidents (anonymized), community-contributed test cases
 
-4. **Challenge:** Performance tests may vary by hardware
+1. **Challenge:** Performance tests may vary by hardware
+
    - **Mitigation:** Relative benchmarks (vs. baseline), normalized metrics, dedicated test hardware
 
-5. **Challenge:** Testing distributed mode requires multiple machines
+1. **Challenge:** Testing distributed mode requires multiple machines
+
    - **Mitigation:** Docker Compose for local multi-node testing, cloud ephemeral instances for CI
 
 **Test Data Management:**
-```
+
+```text
 tests/
 ├── unit/                    # Unit tests for individual components
 │   ├── test_parsers.c
@@ -933,31 +988,37 @@ tests/
 ### Performance Targets
 
 **Throughput:**
+
 - Logs: 100,000 lines/sec (single core)
 - Network: 10 Gbps (with filtering)
 - Combined: 50,000 correlated events/sec
 
 **Latency:**
+
 - End-to-end processing: < 10ms (p95)
 - Correlation latency: < 5ms
 
 **Resource Usage:**
+
 - Memory: < 100MB baseline, configurable limits
 - CPU: < 20% on idle monitoring
 - Disk I/O: Optional, all in-memory by default
 
 **Scaling:**
+
 - Single node: 100K events/sec
 - Distributed: 1M+ events/sec
 
 ### Security Considerations
 
 **Privilege Requirements:**
+
 - Raw packet capture requires `CAP_NET_RAW` or root
 - eBPF requires `CAP_BPF` or root
 - File reading requires appropriate permissions
 
 **Privilege Dropping:**
+
 ```yaml
 security:
   drop_privileges:
@@ -969,28 +1030,28 @@ security:
 ```
 
 **Data Handling:**
+
 - Sensitive data masking (credit cards, passwords)
 - Configurable PII filtering
 - No data persistence by default
 - TLS for network communication
 
 **Input Validation:**
+
 - All external inputs sanitized
 - Query language parser with limits
 - Resource quotas to prevent DoS
 
----
+______________________________________________________________________
 
 ## Milestones & Roadmap
 
-<<<<<<< HEAD
-### Milestone 1: Proof of Concept (2 months) ✅ **Complete**
-=======
 ### Milestone 1: Proof of Concept (2 months) ✅ COMPLETE
->>>>>>> e8c8442 (Update README.md and SPEC.md for milestone completions and new documentation)
+
 **Goal:** Demonstrate basic correlation between logs and network
 
 **Deliverables:**
+
 - [x] Core event loop (libuv-based)
 - [x] File tailing with JSON parsing
 - [x] Basic pcap capture and HTTP parsing
@@ -1000,14 +1061,17 @@ security:
 - [x] README and getting started guide
 
 **Success Criteria:**
+
 - ✅ Can monitor a log file and network interface simultaneously
 - ✅ Can correlate ERROR logs with network events
 - ✅ Outputs correlated events as JSON
 
 ### Milestone 2: Alpha Release (4 months) ✅ MOSTLY COMPLETE
+
 **Goal:** Feature-complete for single-node deployment
 
 **Deliverables:**
+
 - [x] Multi-format log parsing (JSON, logfmt, syslog, regex)
 - [x] HTTP/1.1, DNS, TCP/UDP dissection
 - [x] Filter expressions (field-based, regex, boolean logic) - implemented but has bugs
@@ -1019,14 +1083,17 @@ security:
 - [x] Documentation site - basic docs exist
 
 **Success Criteria:**
+
 - Can handle 10K events/sec on commodity hardware
 - Runs stably for 24+ hours
 - Documentation sufficient for self-service usage
 
 ### Milestone 3: Beta Release (6 months)
+
 **Goal:** Production-ready for early adopters
 
 **Deliverables:**
+
 - [ ] Advanced correlation (ID-based, sequence detection)
 - [ ] Alerting system with multiple backends
 - [ ] Prometheus/OpenTelemetry export
@@ -1037,14 +1104,17 @@ security:
 - [ ] Helm charts for Kubernetes
 
 **Success Criteria:**
+
 - Meets performance targets (50K events/sec)
 - Used in production by 5+ organizations
 - No critical bugs for 1+ month
 
 ### Milestone 4: v1.0 Release (9 months)
+
 **Goal:** General availability
 
 **Deliverables:**
+
 - [ ] eBPF-based capture option
 - [ ] Web UI for visualization
 - [ ] Distributed mode (agent/server)
@@ -1055,33 +1125,37 @@ security:
 - [ ] Commercial support options
 
 **Success Criteria:**
+
 - Feature parity with competitors in core areas
 - 1,000+ GitHub stars
 - Active community (Discord, forum)
 - Clear path to v2.0
 
----
+______________________________________________________________________
 
 ## Success Metrics
 
 ### Technical Metrics
+
 - **Performance:** Sustained 100K events/sec throughput
 - **Reliability:** 99.9% uptime in production deployments
 - **Accuracy:** >95% correlation accuracy (based on ground truth)
 - **Latency:** p95 < 10ms for event processing
 
 ### Adoption Metrics
+
 - **Users:** 1,000 active deployments within 1 year
 - **Contributors:** 20+ code contributors
 - **Integrations:** 10+ third-party integrations (Grafana, Datadog, etc.)
 - **Stars:** 5,000+ GitHub stars
 
 ### Business Metrics
+
 - **Market:** Clear differentiation vs. competitors (Splunk, Datadog, ELK)
 - **Revenue:** Sustainable funding model (enterprise, cloud, support)
 - **Community:** Active Discord/Slack with 500+ members
 
----
+______________________________________________________________________
 
 ## Competitive Analysis
 
@@ -1099,95 +1173,115 @@ security:
 | **nblex** | ✅ | ✅ | ✅ Auto | ✅ | High |
 
 ### Differentiation
-1. **Automatic correlation** - No manual dashboard building needed
-2. **Unified tool** - One tool, not a stack of components
-3. **Lightweight** - Single binary, minimal dependencies
-4. **Real-time** - Sub-second latency from event to insight
-5. **Developer-first** - CLI-native, scriptable, embeddable
 
----
+1. **Automatic correlation** - No manual dashboard building needed
+1. **Unified tool** - One tool, not a stack of components
+1. **Lightweight** - Single binary, minimal dependencies
+1. **Real-time** - Sub-second latency from event to insight
+1. **Developer-first** - CLI-native, scriptable, embeddable
+
+______________________________________________________________________
 
 ## Open Questions & Decisions Needed
 
 ### Technical Decisions
+
 1. **Query language design**
+
    - Custom DSL vs. SQL-like vs. existing language (PromQL, KQL)
    - Decision: SQL-like for familiarity, with extensions for streaming
 
-2. **State management**
+1. **State management**
+
    - In-memory only vs. optional persistence
    - Decision: In-memory by default, optional RocksDB for state
 
-3. **Distribution architecture**
+1. **Distribution architecture**
+
    - Centralized vs. peer-to-peer
    - Decision: Centralized server model (simpler v1)
 
-4. **Plugin system**
+1. **Plugin system**
+
    - Lua vs. WebAssembly vs. native shared libraries
    - Decision: Start with Lua (simpler), add WASM later
 
 ### Business Decisions
+
 1. **Licensing**
+
    - Apache 2.0 vs. GPL vs. dual-license (open core)
    - Decision: Start with Apache 2.0 for maximum adoption
    - Note: Final license will depend on dependencies used (e.g., libpcap is BSD, libuv is MIT, both compatible with Apache 2.0)
 
-2. **Monetization**
+1. **Monetization**
+
    - Open source only vs. enterprise features vs. cloud service
    - Decision: Open source core, optional cloud service
 
-3. **Governance**
+1. **Governance**
+
    - Individual vs. foundation (CNCF, Apache)
    - Decision: Individual initially, consider CNCF after traction
 
 ### Community Decisions
+
 1. **Communication channels**
+
    - GitHub Discussions vs. Discord vs. Discourse
    - Decision: GitHub Discussions + Discord for real-time
 
-2. **Release cadence**
+1. **Release cadence**
+
    - Time-based (quarterly) vs. feature-based
    - Decision: Feature-based until v1.0, then quarterly
 
----
+______________________________________________________________________
 
 ## Risks & Mitigation
 
 ### Technical Risks
 
 **Risk:** Performance doesn't meet targets
+
 - **Mitigation:** Early benchmarking, profiling, SIMD optimizations
 - **Fallback:** Reduce scope (e.g., sample traffic instead of all)
 
 **Risk:** Correlation accuracy is low
+
 - **Mitigation:** Start with simple correlations, add ML later
 - **Fallback:** Manual correlation rules as alternative
 
 **Risk:** Memory usage too high with large flow tables
+
 - **Mitigation:** LRU eviction, configurable limits
 - **Fallback:** Sampling, external state store
 
 ### Market Risks
 
 **Risk:** Low adoption due to crowded market
+
 - **Mitigation:** Clear differentiation, strong marketing, community building
 - **Fallback:** Focus on niche (e.g., security teams only)
 
 **Risk:** Competing with well-funded vendors
+
 - **Mitigation:** Open source advantage, faster iteration
 - **Fallback:** Partner with vendors instead of compete
 
 ### Operational Risks
 
 **Risk:** Maintainer burnout
+
 - **Mitigation:** Build contributor community early
 - **Fallback:** Find co-maintainers or corporate sponsor
 
 **Risk:** Security vulnerabilities in packet parsing
+
 - **Mitigation:** Fuzzing, security audits, safe parsing libraries
 - **Fallback:** Disable network monitoring by default
 
----
+______________________________________________________________________
 
 ## Appendix
 
@@ -1217,6 +1311,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, 
 Apache License 2.0 - See [LICENSE](LICENSE) file for details.
 
 **Dependency Licenses:**
+
 - libpcap - BSD 3-Clause (compatible with Apache 2.0)
 - libuv - MIT (compatible with Apache 2.0)
 - libjansson - MIT (compatible with Apache 2.0)
@@ -1224,7 +1319,7 @@ Apache License 2.0 - See [LICENSE](LICENSE) file for details.
 
 All required dependencies use permissive licenses compatible with Apache 2.0. The final combined work may be distributed under Apache 2.0.
 
----
+______________________________________________________________________
 
 **Document Status:** Living document - updated as project evolves
 **Feedback:** Open an issue or discussion on GitHub

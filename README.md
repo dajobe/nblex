@@ -66,23 +66,26 @@ When complete, nblex will:
 - Multi-format log parsing (JSON, logfmt, syslog, regex)
 - Network protocol dissection (HTTP/1.1, DNS, TCP/UDP)
 - Filter expressions (field-based, regex, boolean logic)
-- Basic query language (SELECT, WHERE, GROUP BY)
+- Basic query language (WHERE filtering implemented)
 - Packet capture via libpcap
-- Unit tests (>70% coverage for core components)
+- JSON output (base output type)
+- Additional output types (file, HTTP, metrics) - implemented
+- Configuration file support (YAML) - basic implementation
+- Unit tests (>70% coverage for core parsers)
+- Documentation site - basic HTML site created
 - Filter engine with real-time evaluation
 
 **🚧 In Progress:**
-- Additional output types (file, HTTP, metrics)
-- Configuration file support (YAML)
 - Integration tests
-- Documentation site
+- CLI tool fixes (naming conflicts)
+- Advanced correlation patterns
+- Web UI for real-time monitoring
 
 **📋 Planned (Milestone 3+):**
 - Advanced correlation (ID-based, pattern-based)
 - Alerting system
 - Prometheus/OpenTelemetry export
 - Distributed mode
-- Web UI
 - Language bindings (Python, Go, Rust)
 
 See [SPEC.md](SPEC.md) for complete specification and roadmap.

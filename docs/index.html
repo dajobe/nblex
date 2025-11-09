@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>nblex - Network & Buffer Log EXplorer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        header {
+            text-align: center;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        h1, h2, h3 {
+            color: #007acc;
+        }
+        .highlight {
+            background-color: #f0f8ff;
+            padding: 15px;
+            border-left: 4px solid #007acc;
+            margin: 20px 0;
+        }
+        .code {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>nblex</h1>
+        <p><em>Network & Buffer Log EXplorer</em></p>
+        <p>A high-performance, real-time observability platform that uniquely combines application log analysis with network traffic monitoring.</p>
+    </header>
+
+    <section id="overview">
+        <h2>What is nblex?</h2>
+        <p>nblex is a lightweight observability tool that correlates application logs with network traffic in real-time. Unlike traditional tools that analyze logs OR network traffic in isolation, nblex links events across both layers to provide unprecedented visibility into system behavior.</p>
+
+        <div class="highlight">
+            <strong>Key Differentiator:</strong> Real-time correlation between application-level insights (logs) and network-level reality (packets).
+        </div>
+    </section>
+
+    <section id="features">
+        <h2>Key Features</h2>
+        <div class="feature-list">
+            <div class="feature-item">
+                <h3>🚀 Real-time Streaming</h3>
+                <p>Process logs and network traffic as events occur with minimal latency.</p>
+            </div>
+            <div class="feature-item">
+                <h3>🔗 Event Correlation</h3>
+                <p>Automatically link related events across application and network layers using time-based and pattern-based correlation.</p>
+            </div>
+            <div class="feature-item">
+                <h3>⚡ High Performance</h3>
+                <p>Built with libuv for non-blocking I/O, handles 10K+ events per second on commodity hardware.</p>
+            </div>
+            <div class="feature-item">
+                <h3>🔍 Advanced Filtering</h3>
+                <p>Powerful query language supporting field-based filtering, regex matching, and boolean logic.</p>
+            </div>
+            <div class="feature-item">
+                <h3>📊 Multiple Outputs</h3>
+                <p>Send correlated events to stdout, files, HTTP endpoints, or Prometheus metrics.</p>
+            </div>
+            <div class="feature-item">
+                <h3>🐧 Linux Focused</h3>
+                <p>Optimized for Linux environments with support for systemd journals, eBPF probes, and container logs.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="use-cases">
+        <h2>Use Cases</h2>
+        <h3>Debugging & Troubleshooting</h3>
+        <ul>
+            <li>Find network timeouts that correlate with application ERROR logs</li>
+            <li>Identify API endpoints that log errors but return 200 OK</li>
+            <li>Correlate database connection issues with actual network traffic</li>
+        </ul>
+
+        <h3>Security Monitoring</h3>
+        <ul>
+            <li>Detect anomalous network patterns during authentication failures</li>
+            <li>Monitor for data exfiltration attempts</li>
+            <li>Correlate suspicious logins with unusual network activity</li>
+        </ul>
+
+        <h3>Performance Analysis</h3>
+        <ul>
+            <li>Identify slow queries that coincide with network congestion</li>
+            <li>Monitor microservice communication patterns</li>
+            <li>Track request/response correlation across service boundaries</li>
+        </ul>
+    </section>
+
+    <section id="getting-started">
+        <h2>Getting Started</h2>
+        <h3>Installation</h3>
+        <div class="code">
+# Clone the repository
+git clone https://github.com/yourorg/nblex.git
+cd nblex
+
+# Build from source
+mkdir build && cd build
+cmake ..
+make
+
+# Install (optional)
+sudo make install
+        </div>
+
+        <h3>Basic Usage</h3>
+        <div class="code">
+# Monitor a log file and network interface
+nblex -i file:/var/log/app.log -i pcap:eth0
+
+# Filter for ERROR logs with high HTTP status codes
+nblex -i file:/var/log/app.log -f "level == 'ERROR' AND status >= 500"
+
+# Output to file with rotation
+nblex -i file:/var/log/app.log -o file:/var/log/correlated.log
+        </div>
+
+        <h3>Configuration File</h3>
+        <div class="code">
+# Example config.yaml
+inputs:
+  - name: app_logs
+    type: file
+    path: /var/log/application/*.log
+  - name: network
+    type: pcap
+    interface: eth0
+
+outputs:
+  - name: console
+    type: stdout
+  - name: metrics
+    type: prometheus
+    path: /var/lib/prometheus/nblex.metrics
+
+correlation:
+  enabled: true
+  window_ms: 100
+        </div>
+    </section>
+
+    <section id="architecture">
+        <h2>Architecture</h2>
+        <p>nblex uses an agent-based architecture with three main components:</p>
+        <ul>
+            <li><strong>Input Agents:</strong> Collect data from logs, network interfaces, and other sources</li>
+            <li><strong>Processing Pipeline:</strong> Parse, filter, and correlate events in real-time</li>
+            <li><strong>Output Agents:</strong> Format and deliver processed events to various destinations</li>
+        </ul>
+        <p>The correlation engine is nblex's key differentiator, automatically linking events across layers using configurable rules and time windows.</p>
+    </section>
+
+    <section id="comparison">
+        <h2>How nblex Compares</h2>
+        <p>Unlike heavy-weight observability platforms, nblex is designed to be:</p>
+        <ul>
+            <li><strong>Lightweight:</strong> Minimal dependencies, low resource usage</li>
+            <li><strong>Focused:</strong> Does one thing well - log/network correlation</li>
+            <li><strong>Fast:</strong> Real-time processing with sub-millisecond latency</li>
+            <li><strong>Simple:</strong> Easy to deploy and configure for development and production</li>
+        </ul>
+        <p>nblex complements existing tools like Elasticsearch, Prometheus, and Jaeger rather than competing with them.</p>
+    </section>
+
+    <section id="roadmap">
+        <h2>Roadmap</h2>
+        <h3>✅ Completed (Milestone 2 - Alpha)</h3>
+        <ul>
+            <li>Multi-format log parsing (JSON, logfmt, syslog, regex)</li>
+            <li>Network protocol dissection (HTTP/1.1, DNS, TCP/UDP)</li>
+            <li>Advanced filtering with boolean logic</li>
+            <li>Basic correlation engine</li>
+            <li>Multiple output formats</li>
+        </ul>
+
+        <h3>🚧 In Progress</h3>
+        <ul>
+            <li>Configuration file support (YAML)</li>
+            <li>Advanced correlation patterns</li>
+            <li>Web UI for real-time monitoring</li>
+        </ul>
+
+        <h3>📋 Planned</h3>
+        <ul>
+            <li>Distributed mode for multi-node correlation</li>
+            <li>Plugin system for custom parsers</li>
+            <li>Integration with popular observability platforms</li>
+        </ul>
+    </section>
+
+    <footer>
+        <p>&copy; 2025 nblex Contributors. Licensed under Apache License 2.0.</p>
+        <p>
+            <a href="https://github.com/yourorg/nblex">GitHub</a> |
+            <a href="SPEC.md">Technical Specification</a> |
+            <a href="CONTRIBUTING.md">Contributing</a>
+        </p>
+    </footer>
+</body>
+</html>
