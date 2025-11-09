@@ -38,6 +38,7 @@ nblex_correlation* nblex_correlation_new(nblex_world* world) {
   corr->log_events_count = 0;
   corr->network_events_count = 0;
   corr->correlations_found = 0;
+  corr->timer_initialized = 0;  /* Timer not initialized yet */
 
   return corr;
 }
@@ -73,11 +74,13 @@ int nblex_correlation_start(nblex_correlation* corr) {
   }
 
   corr->cleanup_timer.data = corr;
+  corr->timer_initialized = 1;  /* Mark timer as initialized */
 
   /* Start periodic cleanup */
   result = uv_timer_start(&corr->cleanup_timer, cleanup_timer_cb,
                          CLEANUP_INTERVAL_MS, CLEANUP_INTERVAL_MS);
   if (result != 0) {
+    corr->timer_initialized = 0;  /* Reset on failure */
     return -1;
   }
 
@@ -92,8 +95,8 @@ void nblex_correlation_free(nblex_correlation* corr) {
     return;
   }
 
-  /* Stop and close timer */
-  if (corr->world && corr->world->loop) {
+  /* Stop and close timer only if it was initialized */
+  if (corr->timer_initialized && corr->world && corr->world->loop) {
     uv_timer_stop(&corr->cleanup_timer);
     uv_close((uv_handle_t*)&corr->cleanup_timer, NULL);
   }
