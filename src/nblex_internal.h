@@ -152,6 +152,7 @@ typedef struct {
   pcap_t* pcap_handle;
   uv_poll_t poll_handle;
   int pcap_fd;
+  int datalink;
   bool capturing;
 
   /* Statistics */
@@ -242,6 +243,7 @@ int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
 /* nQL parser */
 typedef struct nql_query_s nql_query_t;
 nql_query_t* nql_parse(const char* query_str);
+nql_query_t* nql_parse_ex(const char* query_str, char** error_out);
 void nql_free(nql_query_t* query);
 
 /* nQL executor */

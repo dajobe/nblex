@@ -7,7 +7,7 @@
  */
 
 #include "../nblex_internal.h"
-#include "../parsers/nql_parser.c"  /* Include parser for AST structures */
+#include "../parsers/nql_parser.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,7 +21,7 @@ static int execute_query(nql_query_t* query, nblex_event* event, nblex_world* wo
 
 /* Execute filter query */
 static int execute_filter(nql_query_t* query, nblex_event* event) {
-    if (!query || query->type != NQL_TYPE_FILTER || !query->data.filter) {
+    if (!query || query->type != NQL_QUERY_FILTER || !query->data.filter) {
         return 0;
     }
     
@@ -30,7 +30,7 @@ static int execute_filter(nql_query_t* query, nblex_event* event) {
 
 /* Execute correlation query */
 static int execute_correlate(nql_query_t* query, nblex_event* event, nblex_world* world) {
-    if (!query || query->type != NQL_TYPE_CORRELATE || !query->data.correlate) {
+    if (!query || query->type != NQL_QUERY_CORRELATE || !query->data.correlate) {
         return 0;
     }
     
@@ -51,7 +51,7 @@ static int execute_correlate(nql_query_t* query, nblex_event* event, nblex_world
 
 /* Execute show query */
 static int execute_show(nql_query_t* query, nblex_event* event) {
-    if (!query || query->type != NQL_TYPE_SHOW || !query->data.show) {
+    if (!query || query->type != NQL_QUERY_SHOW || !query->data.show) {
         return 0;
     }
     
@@ -68,7 +68,7 @@ static int execute_show(nql_query_t* query, nblex_event* event) {
 
 /* Execute aggregate query (basic - full implementation requires windowing) */
 static int execute_aggregate(nql_query_t* query, nblex_event* event) {
-    if (!query || query->type != NQL_TYPE_AGGREGATE || !query->data.aggregate) {
+    if (!query || query->type != NQL_QUERY_AGGREGATE || !query->data.aggregate) {
         return 0;
     }
     
@@ -86,18 +86,17 @@ static int execute_aggregate(nql_query_t* query, nblex_event* event) {
 
 /* Execute pipeline query */
 static int execute_pipeline(nql_query_t* query, nblex_event* event, nblex_world* world) {
-    if (!query || query->type != NQL_TYPE_PIPELINE) {
+    if (!query || query->type != NQL_QUERY_PIPELINE || !query->data.pipeline.stages) {
         return 0;
     }
-    
-    /* Execute left side first */
-    int left_result = execute_query(query->data.pipeline.left, event, world);
-    if (!left_result) {
-        return 0;
+
+    for (size_t i = 0; i < query->data.pipeline.count; i++) {
+        if (!execute_query(query->data.pipeline.stages[i], event, world)) {
+            return 0;
+        }
     }
-    
-    /* Then execute right side on the result */
-    return execute_query(query->data.pipeline.right, event, world);
+
+    return 1;
 }
 
 /* Execute query (main entry point) */
@@ -107,19 +106,19 @@ int execute_query(nql_query_t* query, nblex_event* event, nblex_world* world) {
     }
     
     switch (query->type) {
-        case NQL_TYPE_FILTER:
+        case NQL_QUERY_FILTER:
             return execute_filter(query, event);
             
-        case NQL_TYPE_CORRELATE:
+        case NQL_QUERY_CORRELATE:
             return execute_correlate(query, event, world);
             
-        case NQL_TYPE_SHOW:
+        case NQL_QUERY_SHOW:
             return execute_show(query, event);
             
-        case NQL_TYPE_AGGREGATE:
+        case NQL_QUERY_AGGREGATE:
             return execute_aggregate(query, event);
             
-        case NQL_TYPE_PIPELINE:
+        case NQL_QUERY_PIPELINE:
             return execute_pipeline(query, event, world);
             
         default:
