@@ -245,13 +245,13 @@ ______________________________________________________________________
 #### Multiple Output Types
 
 - [x] JSON output (completed)
-- [ ] File output (TODO)
-- [ ] HTTP output (TODO)
-- [ ] Metrics output (Prometheus) (TODO)
+- [x] File output (completed)
+- [x] HTTP output (completed)
+- [x] Metrics output (Prometheus) (completed)
 
 #### Configuration File Support
 
-- [ ] YAML configuration file support (TODO)
+- [x] YAML configuration file support (completed)
 
 #### Unit Tests
 
@@ -1066,7 +1066,7 @@ ______________________________________________________________________
 - ✅ Can correlate ERROR logs with network events
 - ✅ Outputs correlated events as JSON
 
-### Milestone 2: Alpha Release (4 months) ✅ MOSTLY COMPLETE
+### Milestone 2: Alpha Release (4 months) ✅ COMPLETE
 
 **Goal:** Feature-complete for single-node deployment
 
@@ -1074,11 +1074,11 @@ ______________________________________________________________________
 
 - [x] Multi-format log parsing (JSON, logfmt, syslog, regex)
 - [x] HTTP/1.1, DNS, TCP/UDP dissection
-- [x] Filter expressions (field-based, regex, boolean logic) - implemented but has bugs
+- [x] Filter expressions (field-based, regex, boolean logic) - integrated into event pipeline
 - [x] Basic query language (WHERE filtering implemented)
 - [x] JSON output (base output type)
-- [ ] Additional output types (file, HTTP, metrics) - NOT implemented
-- [ ] Configuration file support (YAML) - NOT implemented
+- [x] Additional output types (file, HTTP, metrics) - completed
+- [x] Configuration file support (YAML) - completed
 - [x] Unit tests (>70% coverage for core parsers) - parser tests work, filter tests buggy
 - [x] Documentation site - basic docs exist
 
