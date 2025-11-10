@@ -75,9 +75,6 @@ typedef unsigned int u_int;
 
 #include "nblex/nblex.h"
 
-/* Ensure pthread types are available for uv.h */
-#include <pthread.h>
-
 #include <uv.h>
 #include <jansson.h>
 #include <pcap.h>
