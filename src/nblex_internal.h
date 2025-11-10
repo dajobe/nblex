@@ -28,6 +28,7 @@
 #endif
 
 /* For pcap compatibility on Linux - enables BSD types in pcap.h */
+/* Must be defined before <sys/types.h> is included */
 #ifdef __linux__
 #ifndef __FAVOR_BSD
 #define __FAVOR_BSD
@@ -35,6 +36,7 @@
 #endif
 
 /* Include system types before pcap to ensure BSD types are available */
+/* Order matters: sys/types.h must come after __FAVOR_BSD definition */
 #include <sys/types.h>
 #include <pthread.h>
 #include <time.h>
