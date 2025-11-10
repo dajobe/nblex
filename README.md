@@ -102,6 +102,25 @@ See [SPEC.md](SPEC.md) for complete specification and roadmap.
 - CMake 3.10+
 - Git
 
+#### Debian/Ubuntu Development Packages
+
+On Debian-based systems, install the required development packages:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential \
+  cmake \
+  pkg-config \
+  libpcap-dev \
+  libuv1-dev \
+  libjansson-dev \
+  libpcre2-dev \
+  libcurl4-openssl-dev \
+  libyaml-dev \
+  check
+```
+
 ### Building
 
 ```bash
