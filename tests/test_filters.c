@@ -56,7 +56,7 @@ START_TEST(test_filter_equals) {
     ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
 
     /* Test non-matching */
-    json_object_set(data, "level", json_string("ERROR"));
+    json_object_set_new(data, "level", json_string("ERROR"));
     ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
 
     /* Cleanup */
@@ -92,7 +92,7 @@ START_TEST(test_filter_numeric) {
     ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
 
     /* Test non-matching */
-    json_object_set(data, "status", json_integer(200));
+    json_object_set_new(data, "status", json_integer(200));
     ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
 
     /* Cleanup */
@@ -129,7 +129,7 @@ START_TEST(test_filter_and_or) {
     ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
 
     /* Test non-matching (one condition false) */
-    json_object_set(data, "status", json_integer(400));
+    json_object_set_new(data, "status", json_integer(400));
     ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
 
     /* Cleanup */

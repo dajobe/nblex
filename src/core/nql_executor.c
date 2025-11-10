@@ -12,6 +12,9 @@
 #include <string.h>
 #include <math.h>
 
+/* Safety limits */
+#define MAX_SLIDING_WINDOWS 1000
+
 /* Aggregation bucket for group-by */
 typedef struct nql_agg_bucket_s {
     char** group_keys;          /* Group key values */
@@ -60,7 +63,12 @@ typedef struct nql_agg_state_s {
 
 /* Correlation execution state */
 typedef struct nql_corr_state_s {
-    nql_query_t* query;
+    /* Store only the numeric window config from the parsed query.
+     * We do not keep a pointer to the parsed nql_query_t because the
+     * caller frees that after execution; storing only the value needed
+     * prevents use-after-free.
+     */
+    uint32_t within_ms;
     
     /* Event buffers */
     nblex_event_buffer_entry* left_events;
@@ -76,7 +84,13 @@ typedef struct nql_corr_state_s {
 /* Query execution context */
 typedef struct nql_exec_ctx_s {
     nblex_world* world;
-    nql_query_t* query;
+    /* We do NOT retain a pointer to the parsed nql_query_t here because
+     * the caller frees that after nql_execute returns; storing a raw
+     * pointer caused use-after-free when shutdown logic read ctx->query.
+     * Instead store the query type and (optionally) a cached query string
+     * for matching when creating contexts.
+     */
+    nql_query_type_t query_type;
     char* query_string;  /* Cache query string for matching */
     
     union {
@@ -89,6 +103,36 @@ typedef struct nql_exec_ctx_s {
 
 /* Global execution contexts (per world) */
 static nql_exec_ctx_t* exec_contexts = NULL;
+
+/* Called by world teardown to stop and close any timers owned by exec
+ * contexts that reference the given world's loop. This schedules close
+ * callbacks on the loop; the world free code is responsible for running
+ * the loop to process those callbacks and then freeing the context memory.
+ */
+void nblex_exec_contexts_shutdown_world(nblex_world* world) {
+    nql_exec_ctx_t* ctx = exec_contexts;
+    while (ctx) {
+        if (ctx->world == world) {
+            /* Only inspect the union member that corresponds to the
+             * query type recorded on this context. Accessing the inactive
+             * union member is undefined and may read garbage; use the
+             * stored query type to decide which timer (if any) to stop.
+             */
+            if (ctx->query_type == NQL_QUERY_CORRELATE) {
+                if (ctx->state.corr_state && ctx->state.corr_state->timer_active && ctx->state.corr_state->cleanup_timer) {
+                    uv_timer_stop(ctx->state.corr_state->cleanup_timer);
+                    uv_close((uv_handle_t*)ctx->state.corr_state->cleanup_timer, NULL);
+                }
+            } else if (ctx->query_type == NQL_QUERY_AGGREGATE) {
+                if (ctx->state.agg_state && ctx->state.agg_state->timer_active && ctx->state.agg_state->window_timer) {
+                    uv_timer_stop(ctx->state.agg_state->window_timer);
+                    uv_close((uv_handle_t*)ctx->state.agg_state->window_timer, NULL);
+                }
+            }
+        }
+        ctx = ctx->next;
+    }
+}
 
 /* Forward declarations */
 static int execute_filter(nql_query_t* query, nblex_event* event);
@@ -134,7 +178,15 @@ static json_t* json_get_path(json_t* obj, const char* path) {
     return json_get_path(nested, dot + 1);
 }
 
-/* Helper: Extract group key values from event */
+/* Helper: Extract group key values from event
+ *
+ * Ownership:
+ * - The returned char** (array of strings) is heap-allocated and the
+ *   caller takes ownership of the pointer and its contents. The caller
+ *   must eventually free the returned array via `free_group_keys()` when
+ *   it is no longer needed. If the function returns NULL, no ownership
+ *   transfer occurs.
+ */
 static char** extract_group_keys(nql_agg_state_t* agg_state, nblex_event* event, size_t* count_out) {
     if (!agg_state || !event || !event->data) {
         *count_out = 0;
@@ -201,7 +253,13 @@ static int compare_group_keys(char** keys1, char** keys2, size_t count) {
     return 0;
 }
 
-/* Helper: Free group keys */
+/* Helper: Free group keys
+ *
+ * This frees the array returned by `extract_group_keys()` and all
+ * of the duplicated strings inside it. It is the canonical pair for
+ * `extract_group_keys()` and should be used to release ownership of
+ * the returned char** when no longer needed.
+ */
 static void free_group_keys(char** keys, size_t count) {
     if (!keys) {
         return;
@@ -261,6 +319,7 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
         for (size_t i = 0; i < agg_state->funcs_count; i++) {
             nql_agg_func_t* func = &agg_state->funcs[i];
             const char* func_name = NULL;
+            char name[256];
             json_t* value = NULL;
             
             switch (func->type) {
@@ -278,7 +337,6 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
                 
             case NQL_AGG_AVG:
                 if (func->field) {
-                    char name[256];
                     snprintf(name, sizeof(name), "avg_%s", func->field);
                     func_name = name;
                     value = json_real(bucket->count > 0 ? bucket->sum / bucket->count : 0.0);
@@ -287,7 +345,6 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
                 
             case NQL_AGG_MIN:
                 if (func->field) {
-                    char name[256];
                     snprintf(name, sizeof(name), "min_%s", func->field);
                     func_name = name;
                     value = json_real(bucket->min);
@@ -296,7 +353,6 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
                 
             case NQL_AGG_MAX:
                 if (func->field) {
-                    char name[256];
                     snprintf(name, sizeof(name), "max_%s", func->field);
                     func_name = name;
                     value = json_real(bucket->max);
@@ -326,7 +382,6 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
                         }
                         size_t idx = (size_t)((func->percentile / 100.0) * size);
                         if (idx >= size) idx = size - 1;
-                        char name[256];
                         snprintf(name, sizeof(name), "p%.0f_%s", func->percentile, func->field);
                         func_name = name;
                         value = json_real(values[idx]);
@@ -337,7 +392,6 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
                 
             case NQL_AGG_DISTINCT:
                 if (func->field) {
-                    char name[256];
                     snprintf(name, sizeof(name), "distinct_%s", func->field);
                     func_name = name;
                     value = json_integer(bucket->distinct_count);
@@ -588,31 +642,10 @@ static int copy_agg_config(nql_agg_state_t* agg_state, nql_aggregate_t* agg) {
 }
 
 /* Helper: Free aggregation state resources */
-static void free_agg_state_resources(nql_agg_state_t* agg_state) {
-    if (!agg_state) {
-        return;
-    }
-    
-    /* Free aggregation functions */
-    if (agg_state->funcs) {
-        for (size_t i = 0; i < agg_state->funcs_count; i++) {
-            free(agg_state->funcs[i].field);
-        }
-        free(agg_state->funcs);
-        agg_state->funcs = NULL;
-    }
-    
-    /* Free group by fields */
-    if (agg_state->group_by_fields) {
-        for (size_t i = 0; i < agg_state->group_by_count; i++) {
-            free(agg_state->group_by_fields[i]);
-        }
-        free(agg_state->group_by_fields);
-        agg_state->group_by_fields = NULL;
-    }
-    
-    /* Note: where_filter is not freed here - it's owned by the query */
-}
+/* NOTE: free_agg_state_resources was removed — resource cleanup is handled
+ * by the context teardown code that knows ownership of the state. The
+ * previous implementation was unused and caused a compiler warning.
+ */
 
 /* Get or create aggregation state */
 static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, const char* query_str) {
@@ -687,7 +720,7 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
     }
     
     new_ctx->world = world;
-    new_ctx->query = query;  /* Store for reference, but state doesn't depend on it */
+    new_ctx->query_type = query->type;
     new_ctx->query_string = query_str ? strdup(query_str) : NULL;
     new_ctx->state.agg_state = agg_state;
     new_ctx->next = exec_contexts;
@@ -744,7 +777,17 @@ static nql_agg_bucket_t* create_bucket_with_window(nql_agg_state_t* agg_state,
     return bucket;
 }
 
-/* Get or create bucket(s) for group keys and event timestamp */
+/* Get or create bucket(s) for group keys and event timestamp
+ * Ownership contract (stricter):
+ * - The caller transfers ownership of `group_keys` to this function.
+ * - On success, if the function attaches the `group_keys` pointer to a
+ *   created bucket, the bucket owns the pointer and this function will
+ *   NOT free it. Otherwise (e.g., when an existing bucket is used),
+ *   this function will free the passed-in `group_keys` before returning.
+ * - On failure, this function will free `group_keys` if it was not
+ *   attached to a bucket.
+ * Return: 0 on success (buckets_out populated), -1 on error.
+ */
 static int get_or_create_buckets_for_event(nql_agg_state_t* agg_state,
                                            char** group_keys,
                                            size_t group_keys_count,
@@ -757,18 +800,21 @@ static int get_or_create_buckets_for_event(nql_agg_state_t* agg_state,
         }
         return -1;
     }
-    
+
+    bool keys_owned_by_bucket = false;
+    nql_agg_bucket_t** buckets = NULL;
+    size_t count = 0;
+
     *buckets_count_out = 0;
     *buckets_out = NULL;
-    
+
     if (agg_state->window.type == NQL_WINDOW_NONE) {
-        /* No windowing: one bucket per group key (or single bucket if no group by) */
-        /* Search for existing bucket by group keys only (ignore window) */
+        /* No windowing: single bucket per group */
         nql_agg_bucket_t* bucket = agg_state->buckets;
         while (bucket) {
             if (compare_group_keys(bucket->group_keys, group_keys, group_keys_count) == 0 &&
                 bucket->window_start_ns == 0 && bucket->window_end_ns == UINT64_MAX) {
-                /* Found existing no-window bucket */
+                /* Found existing no-window bucket: we do not keep our copied keys */
                 if (group_keys) {
                     free_group_keys(group_keys, group_keys_count);
                 }
@@ -782,36 +828,37 @@ static int get_or_create_buckets_for_event(nql_agg_state_t* agg_state,
             }
             bucket = bucket->next;
         }
-        
-        /* Create bucket with no window */
+
+        /* Create bucket with no window - ownership of group_keys moves to bucket */
         bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count, 0, UINT64_MAX);
         if (!bucket) {
+            /* create failed -> free keys */
             if (group_keys) {
                 free_group_keys(group_keys, group_keys_count);
             }
             return -1;
         }
-        
+        keys_owned_by_bucket = true;
+
         *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
         if (!*buckets_out) {
+            /* Allocation failure - bucket remains in state and owns keys */
             return -1;
         }
         (*buckets_out)[0] = bucket;
         *buckets_count_out = 1;
         return 0;
     }
-    
+
     if (agg_state->window.type == NQL_WINDOW_SESSION) {
         /* Session window: find or create bucket for this group */
         nql_agg_bucket_t* bucket = NULL;
         nql_agg_bucket_t* iter = agg_state->buckets;
         uint64_t timeout_ns = agg_state->window.timeout_ms * 1000000ULL;
-        
-        /* Find existing session bucket for this group */
+
         while (iter) {
             if (compare_group_keys(iter->group_keys, group_keys, group_keys_count) == 0 &&
-                iter->window_end_ns == UINT64_MAX) { /* Session windows have UINT64_MAX as end */
-                /* Check if event is within session timeout */
+                iter->window_end_ns == UINT64_MAX) {
                 if (event_timestamp_ns >= iter->last_event_ns &&
                     (event_timestamp_ns - iter->last_event_ns) < timeout_ns) {
                     bucket = iter;
@@ -820,102 +867,103 @@ static int get_or_create_buckets_for_event(nql_agg_state_t* agg_state,
             }
             iter = iter->next;
         }
-        
+
         if (!bucket) {
-            /* Create new session window */
             bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count,
-                                             event_timestamp_ns, UINT64_MAX);
+                                               event_timestamp_ns, UINT64_MAX);
             if (!bucket) {
                 if (group_keys) {
                     free_group_keys(group_keys, group_keys_count);
                 }
                 return -1;
             }
+            keys_owned_by_bucket = true;
         } else {
+            /* Existing bucket found; our copied keys are not needed */
             if (group_keys) {
                 free_group_keys(group_keys, group_keys_count);
             }
         }
-        
+
         *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
         if (!*buckets_out) {
+            /* On allocation failure, if keys were not taken by the bucket, free them */
+            if (!keys_owned_by_bucket && group_keys) {
+                free_group_keys(group_keys, group_keys_count);
+            }
             return -1;
         }
         (*buckets_out)[0] = bucket;
         *buckets_count_out = 1;
         return 0;
     }
-    
+
     /* Tumbling or sliding window */
     uint64_t window_size_ns = agg_state->window.size_ms * 1000000ULL;
     uint64_t slide_ns = agg_state->window.slide_ms > 0 ? agg_state->window.slide_ms * 1000000ULL : window_size_ns;
-    
+
     if (agg_state->window.type == NQL_WINDOW_TUMBLING) {
-        /* Tumbling: event belongs to one window, aligned to window boundaries */
         uint64_t window_start = (event_timestamp_ns / window_size_ns) * window_size_ns;
         nql_agg_bucket_t* bucket = find_bucket_by_window(agg_state, group_keys, group_keys_count, window_start);
         if (!bucket) {
             bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count,
-                                             window_start, window_start + window_size_ns);
+                                               window_start, window_start + window_size_ns);
             if (!bucket) {
                 if (group_keys) {
                     free_group_keys(group_keys, group_keys_count);
                 }
                 return -1;
             }
+            keys_owned_by_bucket = true;
         } else {
             if (group_keys) {
                 free_group_keys(group_keys, group_keys_count);
             }
         }
-        
+
         *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
         if (!*buckets_out) {
+            if (!keys_owned_by_bucket && group_keys) {
+                free_group_keys(group_keys, group_keys_count);
+            }
             return -1;
         }
         (*buckets_out)[0] = bucket;
         *buckets_count_out = 1;
         return 0;
     }
-    
+
     /* Sliding window: event may belong to multiple windows */
-    /* Find all windows that contain this event */
-    /* Windows are aligned to slide boundaries */
     uint64_t window_start = ((event_timestamp_ns / slide_ns) * slide_ns);
-    
-    /* Calculate how many windows can contain this event */
-    /* A window contains an event if: window_start <= event_ts < window_start + window_size */
-    /* So we need windows where: window_start <= event_ts AND window_start + window_size > event_ts */
-    /* Which means: window_start > event_ts - window_size AND window_start <= event_ts */
     uint64_t earliest_window_start = (event_timestamp_ns >= window_size_ns) ?
                                      (event_timestamp_ns - window_size_ns) : 0;
     earliest_window_start = ((earliest_window_start / slide_ns) * slide_ns);
-    
+
     size_t max_windows = ((window_start - earliest_window_start) / slide_ns) + 1;
-    if (max_windows > 1000) {
-        max_windows = 1000; /* Safety limit */
+    if (max_windows > MAX_SLIDING_WINDOWS) {
+        max_windows = MAX_SLIDING_WINDOWS; /* Safety limit */
     }
-    
-    nql_agg_bucket_t** buckets = calloc(max_windows, sizeof(nql_agg_bucket_t*));
+
+    buckets = calloc(max_windows, sizeof(nql_agg_bucket_t*));
     if (!buckets) {
         if (group_keys) {
             free_group_keys(group_keys, group_keys_count);
         }
         return -1;
     }
-    
-    size_t count = 0;
+
+    count = 0;
     uint64_t current_window_start = earliest_window_start;
-    bool keys_owned_by_bucket = false;
-    
+
     while (current_window_start <= event_timestamp_ns &&
            current_window_start + window_size_ns > event_timestamp_ns &&
            count < max_windows) {
         nql_agg_bucket_t* bucket = find_bucket_by_window(agg_state, group_keys, group_keys_count, current_window_start);
         if (!bucket) {
             bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count,
-                                             current_window_start, current_window_start + window_size_ns);
+                                               current_window_start, current_window_start + window_size_ns);
             if (!bucket) {
+                /* Cleanup and free keys if not owned by any bucket */
                 free(buckets);
                 if (!keys_owned_by_bucket && group_keys) {
                     free_group_keys(group_keys, group_keys_count);
@@ -925,25 +973,15 @@ static int get_or_create_buckets_for_event(nql_agg_state_t* agg_state,
             keys_owned_by_bucket = true; /* Keys now owned by bucket */
         }
         buckets[count++] = bucket;
-        
+
         current_window_start += slide_ns;
     }
-    
-    /* Free group keys if they weren't used by any bucket */
-    if (!keys_owned_by_bucket && count > 0) {
-        /* Check if any bucket owns these keys */
-        for (size_t i = 0; i < count; i++) {
-            if (buckets[i]->group_keys == group_keys) {
-                keys_owned_by_bucket = true;
-                break;
-            }
-        }
-    }
-    
+
+    /* If none of the created buckets claimed the keys, free them */
     if (!keys_owned_by_bucket && group_keys) {
         free_group_keys(group_keys, group_keys_count);
     }
-    
+
     *buckets_out = buckets;
     *buckets_count_out = count;
     return 0;
@@ -1069,8 +1107,15 @@ static int execute_aggregate(nql_query_t* query, nblex_event* event, nblex_world
     size_t buckets_count = 0;
     if (get_or_create_buckets_for_event(agg_state, group_keys, group_keys_count,
                                         event_timestamp_ns, &buckets, &buckets_count) != 0) {
+        /* get_or_create_buckets_for_event takes ownership of group_keys
+         * (frees it on error). Null out local pointer to avoid accidental
+         * use/free by caller. */
+        group_keys = NULL;
         return 0;
     }
+    /* Ownership of group_keys has been transferred to the helper; clear
+     * local pointer to avoid accidental use/free. */
+    group_keys = NULL;
     
     /* Update all buckets with event data */
     for (size_t i = 0; i < buckets_count; i++) {
@@ -1108,18 +1153,12 @@ static int add_corr_event(nql_corr_state_t* corr_state, nblex_event* event, bool
         return -1;
     }
     
-    /* Duplicate event */
-    nblex_event* event_copy = calloc(1, sizeof(nblex_event));
+    /* Duplicate event (use helper to ensure proper JSON refcounting) */
+    nblex_event* event_copy = nblex_event_clone(event);
     if (!event_copy) {
         free(entry);
         return -1;
     }
-    
-    memcpy(event_copy, event, sizeof(nblex_event));
-    if (event_copy->data) {
-        json_incref(event_copy->data);
-    }
-    
     entry->event = event_copy;
     
     if (is_left) {
@@ -1138,12 +1177,11 @@ static int add_corr_event(nql_corr_state_t* corr_state, nblex_event* event, bool
 /* Correlation cleanup callback */
 static void corr_cleanup_cb(uv_timer_t* handle) {
     nql_corr_state_t* corr_state = (nql_corr_state_t*)handle->data;
-    if (!corr_state || !corr_state->query || !corr_state->query->data.correlate) {
+    if (!corr_state) {
         return;
     }
-    
     uint64_t now = nblex_timestamp_now();
-    uint64_t window_ns = corr_state->query->data.correlate->within_ms * 1000000ULL;
+    uint64_t window_ns = (uint64_t)corr_state->within_ms * 1000000ULL;
     uint64_t cutoff = now - (window_ns * 2);
     
     /* Clean left buffer */
@@ -1193,14 +1231,13 @@ static nql_corr_state_t* get_corr_state(nql_query_t* query, nblex_world* world, 
         }
     }
     
-    /* Check existing contexts by query pointer */
-    nql_exec_ctx_t* ctx = exec_contexts;
-    while (ctx) {
-        if (ctx->query == query && ctx->world == world && ctx->state.corr_state) {
-            return ctx->state.corr_state;
-        }
-        ctx = ctx->next;
-    }
+    /* If no query_str was provided we cannot match by string; in that
+     * unusual case we simply fall through and create a new context. The
+     * previous implementation attempted to match by retaining the raw
+     * parsed query pointer in the context which led to use-after-free
+     * when the caller freed the parsed query. We avoid that class of bug
+     * by not storing the parsed query pointer here.
+     */
     
     /* Create new context and state */
     nql_exec_ctx_t* new_ctx = calloc(1, sizeof(nql_exec_ctx_t));
@@ -1214,7 +1251,14 @@ static nql_corr_state_t* get_corr_state(nql_query_t* query, nblex_world* world, 
         return NULL;
     }
     
-    corr_state->query = query;
+    /* Store a copy of the important numeric configuration (window)
+     * from the parsed query. We don't retain the parsed query pointer
+     * because the caller frees it after execution. */
+    if (query && query->data.correlate) {
+        corr_state->within_ms = query->data.correlate->within_ms;
+    } else {
+        corr_state->within_ms = 0;
+    }
     corr_state->left_events = NULL;
     corr_state->right_events = NULL;
     corr_state->left_count = 0;
@@ -1233,7 +1277,7 @@ static nql_corr_state_t* get_corr_state(nql_query_t* query, nblex_world* world, 
     }
     
     new_ctx->world = world;
-    new_ctx->query = query;
+    new_ctx->query_type = query->type;
     new_ctx->query_string = query_str ? strdup(query_str) : NULL;
     new_ctx->state.corr_state = corr_state;
     new_ctx->next = exec_contexts;
@@ -1273,7 +1317,9 @@ static nblex_event* create_corr_result_event(nblex_event* left_event,
     
     result->data = corr_data;
     result->timestamp_ns = left_event->timestamp_ns > right_event->timestamp_ns ?
-                         left_event->timestamp_ns : right_event->timestamp_ns;
+             left_event->timestamp_ns : right_event->timestamp_ns;
+
+    (void)left_event; (void)right_event; (void)corr; /* no-op to keep compilers quiet when logging removed */
     
     return result;
 }

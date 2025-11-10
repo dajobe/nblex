@@ -188,7 +188,7 @@ START_TEST(test_nql_execute_filter) {
 
   ck_assert_int_eq(nql_execute("log.level == \"ERROR\"", event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute("log.level == \"ERROR\"", event, world), 0);
 
   nblex_event_free(event);
@@ -207,7 +207,7 @@ START_TEST(test_nql_execute_pipeline) {
       "log.level == \"ERROR\" | show log.level where log.level == \"ERROR\"";
   ck_assert_int_eq(nql_execute(expr, event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute(expr, event, world), 0);
 
   nblex_event_free(event);
@@ -227,7 +227,7 @@ START_TEST(test_nql_execute_show_where) {
   const char* expr = "show log.service where log.level == \"ERROR\"";
   ck_assert_int_eq(nql_execute(expr, event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute(expr, event, world), 0);
 
   nblex_event_free(event);
@@ -260,7 +260,7 @@ START_TEST(test_nql_execute_aggregate_where) {
       "aggregate count() by log.service where log.level == \"ERROR\"";
   ck_assert_int_eq(nql_execute(expr, event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute(expr, event, world), 0);
 
   nblex_event_free(event);
@@ -277,17 +277,11 @@ static size_t captured_events_capacity = 0;
 
 static void capture_event_handler(nblex_event* event, void* user_data) {
   (void)user_data;
+  /* Debug: indicate handler invoked */
   if (captured_event) {
     nblex_event_free(captured_event);
   }
-  captured_event = calloc(1, sizeof(nblex_event));
-  if (captured_event && event) {
-    memcpy(captured_event, event, sizeof(nblex_event));
-    if (event->data) {
-      json_incref(event->data);
-      captured_event->data = event->data;
-    }
-  }
+  captured_event = nblex_event_clone(event);
   
   /* Also add to array */
   if (captured_events_count >= captured_events_capacity) {
@@ -300,13 +294,8 @@ static void capture_event_handler(nblex_event* event, void* user_data) {
   }
   
   if (captured_events && captured_events_count < captured_events_capacity) {
-    captured_events[captured_events_count] = calloc(1, sizeof(nblex_event));
-    if (captured_events[captured_events_count] && event) {
-      memcpy(captured_events[captured_events_count], event, sizeof(nblex_event));
-      if (event->data) {
-        json_incref(event->data);
-        captured_events[captured_events_count]->data = event->data;
-      }
+    captured_events[captured_events_count] = nblex_event_clone(event);
+    if (captured_events[captured_events_count]) {
       captured_events_count++;
     }
   }
