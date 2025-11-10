@@ -198,7 +198,9 @@ ______________________________________________________________________
 
 ## Features
 
-### Phase 1: Foundation (v0.1-0.3)
+### Phase 1: Foundation (v0.1-0.3) ✅ COMPLETE
+
+**Goal:** Core infrastructure and basic functionality
 
 #### Core Streaming Engine
 
@@ -216,55 +218,20 @@ ______________________________________________________________________
 - [x] Custom regex patterns
 - [x] Timestamp extraction and normalization
 
-### Phase 2: Alpha Release (4 months)
+______________________________________________________________________
 
-#### Multi-format Log Parsing
+### Phase 2: Alpha Release (v0.4-0.5) 🟡 MOSTLY COMPLETE
 
-- [x] JSON log parsing (completed)
-- [x] Logfmt parsing (completed)
-- [x] Syslog parsing (RFC 5424, RFC 3164) (completed)
-- [x] Custom regex patterns (completed)
+**Goal:** Feature-complete for single-node deployment
+
+#### Log Parsing & Format Support
+
+- [x] JSON log parsing
+- [x] Logfmt parsing
+- [x] Syslog parsing (RFC 5424, RFC 3164)
+- [x] Custom regex patterns
 
 #### Network Protocol Dissection
-
-- [x] HTTP/1.1 request/response parsing (completed)
-- [x] DNS query/response parsing (completed)
-- [x] TCP/UDP header parsing (completed)
-
-#### Filter Engine
-
-- [x] Field-based filtering (level == "ERROR") (completed)
-- [x] Regex matching (=~ operator) (completed)
-- [x] Boolean logic (AND/OR/NOT) (completed)
-
-#### Basic Query Language
-
-- [x] SELECT, WHERE, GROUP BY (basic implementation)
-- [x] Field-based filtering (completed)
-
-#### Multiple Output Types
-
-- [x] JSON output (completed)
-- [x] File output (completed)
-- [x] HTTP output (completed)
-- [x] Metrics output (Prometheus) (completed)
-
-#### Configuration File Support
-
-- [x] YAML configuration file support (completed)
-
-#### Unit Tests
-
-- [x] Parser unit tests (>70% coverage for core parsers)
-- [x] Filter engine unit tests (basic coverage)
-- [ ] Integration tests (TODO)
-
-#### Documentation Site
-
-- [ ] API documentation (TODO)
-- [ ] User guide (TODO)
-
-#### Basic Network Monitoring
 
 - [x] Packet capture via libpcap
 - [x] TCP/UDP header parsing
@@ -272,45 +239,27 @@ ______________________________________________________________________
 - [x] DNS query/response parsing
 - [x] Connection tracking (flow table)
 
-#### Simple Correlation
+#### Filter Engine
 
-- [x] Time-based correlation (configurable window)
-- [x] Basic filtering (log.level AND network.port)
-- [x] JSON output
+- [x] Field-based filtering (level == "ERROR")
+- [x] Regex matching (=~ operator)
+- [x] Boolean logic (AND/OR/NOT)
 
-#### CLI Tool
-
-```bash
-nblex monitor \
-  --logs /var/log/app/*.log \
-  --network eth0 \
-  --filter 'log.level == ERROR' \
-  --output json
-```
-
-### Phase 2: Intelligence (v0.4-0.6)
-
-#### Advanced Parsing
-
-- [ ] Multi-line log support (stack traces, etc.)
-- [ ] Binary log formats (Protobuf, MessagePack)
-- [ ] HTTP/2 and gRPC dissection
-- [ ] TLS metadata extraction (SNI, versions, ciphers)
-- [ ] Custom Lua/JavaScript parsers
-
-#### Query Language: nQL (nblex Query Language)
+#### Basic Query Language (nQL)
 
 nblex uses a lightweight, filter-first query language (nQL) optimized for streaming log and network correlation. nQL is simpler than SQL, designed for real-time event processing, and builds on the existing filter expression syntax.
 
-**Current status (2025-11-09):**
+**Current status (2025-11-09, updated):**
 
-- ✅ Parser refactored with shared AST header and extended `nql_parse_ex` API
-- ✅ Executor updated to respect multi-stage pipelines
-- ✅ Unit tests expanded to cover additional parse/execute scenarios
-- ✅ Decision: derived query results will be emitted as synthetic `nblex_event` instances
-- ⬜ Implement aggregation state, windowing, and correlation outputs in executor
-- ⬜ Define and document derived-event payload schema for downstream outputs
-- ⬜ Extend tests to cover aggregates, correlations, and advanced pipelines end-to-end
+- [x] Parser refactored with shared AST header and extended `nql_parse_ex` API
+- [x] Executor updated to respect multi-stage pipelines
+- [x] Unit tests expanded to cover additional parse/execute scenarios
+- [x] Decision: derived query results will be emitted as synthetic `nblex_event` instances
+- [x] SELECT, WHERE, GROUP BY (basic implementation)
+- [x] Field-based filtering
+- [~] **IN PROGRESS:** Implement aggregation state, windowing, and correlation outputs in executor
+- [~] **IN PROGRESS:** Define and document derived-event payload schema for downstream outputs
+- [ ] Extend tests to cover aggregates, correlations, and advanced pipelines end-to-end
 
 **Core Syntax:**
 
@@ -346,12 +295,75 @@ show log.service, log.message, network.latency_ms where log.level == ERROR
 - **Stream-optimized**: Designed for real-time event processing
 - **Leverages existing**: Reuses filter engine expression syntax
 
+#### Basic Correlation
+
+- [x] Time-based correlation (configurable window)
+- [x] Basic filtering (log.level AND network.port)
+- [x] JSON output
+
+#### Output Types
+
+- [x] JSON output
+- [x] File output
+- [x] HTTP output
+- [x] Metrics output (Prometheus)
+
+#### Configuration & CLI
+
+- [x] YAML configuration file support
+- [x] CLI tool with basic options
+
+```bash
+nblex monitor \
+  --logs /var/log/app/*.log \
+  --network eth0 \
+  --filter 'log.level == ERROR' \
+  --output json
+```
+
+#### Testing
+
+- [x] Parser unit tests (>70% coverage for core parsers)
+- [x] Filter engine unit tests (basic coverage)
+- [ ] Integration tests
+
+#### Documentation
+
+- [ ] API documentation
+- [ ] User guide
+
+______________________________________________________________________
+
+### Phase 3: Beta Release (v0.6-0.7)
+
+**Goal:** Usable for production debugging by early adopters
+
+#### Advanced Parsing
+
+- [ ] Multi-line log support (stack traces, etc.)
+- [ ] Binary log formats (Protobuf, MessagePack)
+- [ ] Custom Lua/JavaScript parsers
+
+#### Advanced Network Protocol Dissection
+
+- [ ] HTTP/2 and gRPC dissection
+- [ ] TLS metadata extraction (SNI, versions, ciphers)
+
+#### Enhanced Query Language (nQL)
+
+- [ ] Aggregation state management
+- [ ] Windowing (tumbling, sliding, session windows)
+- [ ] Correlation query execution
+- [ ] Derived-event payload schema definition
+- [ ] Advanced pipeline support
+
 #### Enhanced Correlation
 
 - [ ] Request ID tracking across services
 - [ ] Process-to-connection mapping (via /proc, eBPF)
 - [ ] Sequence detection (event A → event B → event C)
-- [ ] Anomaly detection (ML-based patterns)
+- [ ] ID-based correlation (trace/request/transaction IDs)
+- [ ] Connection correlation (match network flows to processes)
 
 #### Export to Alerting Systems
 
@@ -361,20 +373,45 @@ nblex exports correlated events to external alerting systems via webhooks and HT
 - [ ] Event filtering and routing to different endpoints
 - [ ] Integration with existing alerting infrastructure
 
-#### Metrics Export
+#### Enhanced Metrics Export
 
-- [ ] Prometheus exporter for dashboards
+- [ ] Prometheus exporter for dashboards (enhanced)
 - [ ] OpenTelemetry integration
 - [ ] Custom metric definitions
 
-### Phase 3: Scale (v0.7-1.0)
+#### Performance Optimizations
 
-#### Performance
-
-- [ ] eBPF-based capture (lower overhead than libpcap)
 - [ ] SIMD-optimized parsing
 - [ ] Lock-free data structures
+- [ ] Zero-copy optimizations
+
+#### Testing & Quality
+
+- [ ] Integration tests
+- [ ] Benchmark suite
+- [ ] Extended test coverage for aggregates, correlations, and advanced pipelines
+
+#### Deployment & Distribution
+
+- [ ] Docker images
+- [ ] Helm charts for Kubernetes
+
+______________________________________________________________________
+
+### Phase 4: v1.0 Release (v0.8-1.0)
+
+**Goal:** General availability with scale and polish
+
+#### Performance & Scale
+
+- [ ] eBPF-based capture (lower overhead than libpcap)
 - [ ] Multi-core scaling
+- [ ] Live traffic sampling (analyze 10% of packets)
+
+#### Advanced Correlation
+
+- [ ] Pattern correlation (behavioral patterns)
+- [ ] Anomaly detection (ML-based patterns)
 
 #### Export to Centralized Systems
 
@@ -390,9 +427,22 @@ nblex exports correlated events to external alerting systems via webhooks and HT
 
 #### Advanced Features
 
-- [ ] Live traffic sampling (analyze 10% of packets)
 - [ ] Encrypted log transport (TLS)
 - [ ] Optional simple viewer for real-time correlation visualization
+- [ ] Mature nQL execution (window management, result schemas, fault handling)
+
+#### Language Bindings
+
+- [ ] Python bindings (ctypes/CFFI)
+- [ ] Go bindings (cgo)
+- [ ] Rust bindings (bindgen)
+- [ ] Node.js bindings (N-API)
+
+#### Security & Quality
+
+- [ ] Security audit
+- [ ] Professional documentation
+- [ ] Commercial support options
 
 ______________________________________________________________________
 
@@ -1019,21 +1069,18 @@ ______________________________________________________________________
 - ✅ Can correlate ERROR logs with network events
 - ✅ Outputs correlated events as JSON
 
-### Milestone 2: Alpha Release (4 months) ✅ COMPLETE
+### Milestone 2: Alpha Release (v0.4-0.5) 🟡 IN PROGRESS
 
 **Goal:** Feature-complete for single-node deployment
 
-**Deliverables:**
+**Status:** Mostly complete - see Phase 2 in Features section
 
-- [x] Multi-format log parsing (JSON, logfmt, syslog, regex)
-- [x] HTTP/1.1, DNS, TCP/UDP dissection
-- [x] Filter expressions (field-based, regex, boolean logic) - integrated into event pipeline
-- [x] Basic query language (WHERE filtering implemented)
-- [x] JSON output (base output type)
-- [x] Additional output types (file, HTTP, metrics) - completed
-- [x] Configuration file support (YAML) - completed
-- [x] Unit tests (>70% coverage for core parsers) - parser tests work, filter tests buggy
-- [x] Documentation site - basic docs exist
+**Remaining Deliverables:**
+
+- [ ] Integration tests
+- [ ] API documentation
+- [ ] User guide
+- [ ] nQL aggregation state, windowing, and correlation outputs
 
 **Success Criteria:**
 
@@ -1041,17 +1088,17 @@ ______________________________________________________________________
 - Runs stably for 24+ hours
 - Documentation sufficient for self-service usage
 
-### Milestone 3: Beta Release (6 months)
+### Milestone 3: Beta Release (v0.6-0.7)
 
 **Goal:** Usable for production debugging by early adopters
 
-**Deliverables:**
+**Deliverables:** See Phase 3 in Features section
 
-- [ ] Advanced correlation (ID-based, sequence detection)
-- [ ] Aggregation and correlation execution engine emitting derived events
+- [ ] Advanced correlation (ID-based, sequence detection, process-to-connection mapping)
+- [ ] Enhanced nQL (aggregation state, windowing, correlation execution)
 - [ ] Export to alerting systems (webhooks, HTTP endpoints)
-- [ ] Prometheus/OpenTelemetry export
-- [ ] Performance optimizations (SIMD, zero-copy)
+- [ ] Enhanced metrics export (OpenTelemetry, custom metrics)
+- [ ] Performance optimizations (SIMD, lock-free structures, zero-copy)
 - [ ] Integration tests
 - [ ] Benchmark suite
 - [ ] Docker images
@@ -1063,18 +1110,20 @@ ______________________________________________________________________
 - Used for production debugging by 5+ organizations
 - No critical bugs for 1+ month
 
-### Milestone 4: v1.0 Release (9 months)
+### Milestone 4: v1.0 Release (v0.8-1.0)
 
 **Goal:** General availability
 
-**Deliverables:**
+**Deliverables:** See Phase 4 in Features section
 
 - [ ] eBPF-based capture option
-- [ ] Mature nQL execution (window management, result schemas, fault handling)
-- [ ] Optional simple viewer for correlation visualization
+- [ ] Multi-core scaling
+- [ ] Advanced correlation (pattern correlation, anomaly detection)
 - [ ] Export to centralized systems (Kafka, NATS)
 - [ ] Export to storage systems (Elasticsearch, Loki, ClickHouse)
-- [ ] Language bindings (Python, Go)
+- [ ] Mature nQL execution (window management, result schemas, fault handling)
+- [ ] Language bindings (Python, Go, Rust, Node.js)
+- [ ] Optional simple viewer for correlation visualization
 - [ ] Security audit
 - [ ] Professional documentation
 - [ ] Commercial support options
