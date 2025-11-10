@@ -93,6 +93,12 @@ void nblex_world_free(nblex_world* world) {
     nblex_correlation_free(world->correlation);
   }
 
+  /* Ask the executor module to shutdown exec-context timers that reference
+   * this world's loop so their close callbacks can be processed during the
+   * loop drain. The executor has access to the internal exec_contexts list.
+   */
+  nblex_exec_contexts_shutdown_world(world);
+
   /* Free inputs */
   if (world->inputs) {
     for (size_t i = 0; i < world->inputs_count; i++) {
@@ -105,12 +111,20 @@ void nblex_world_free(nblex_world* world) {
 
   /* Close event loop */
   if (world->loop) {
-    /* Run the loop once more to process any pending close callbacks */
-    /* This is required before uv_loop_close() can succeed */
-    uv_run(world->loop, UV_RUN_ONCE);
-    
-    /* Now it's safe to close the loop */
-    uv_loop_close(world->loop);
+    /* Attempt to close the loop. If there are still active handles,
+     * uv_loop_close() will return UV_EBUSY; in that case run the loop
+     * to allow close callbacks to run and retry until it succeeds.
+     */
+    int rc = uv_loop_close(world->loop);
+    while (rc == UV_EBUSY) {
+      /* Run pending close callbacks once and retry. Use UV_RUN_ONCE so the
+       * loop will process at least one pending callback (close callbacks)
+       * which allows uv_loop_close() to eventually succeed.
+       */
+      uv_run(world->loop, UV_RUN_ONCE);
+      rc = uv_loop_close(world->loop);
+    }
+
     free(world->loop);
   }
 

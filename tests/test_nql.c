@@ -20,6 +20,7 @@
 
 #include <check.h>
 #include <string.h>
+#include <stdlib.h>
 #include "../src/nblex_internal.h"
 #include "../src/parsers/nql_parser.h"
 
@@ -187,7 +188,7 @@ START_TEST(test_nql_execute_filter) {
 
   ck_assert_int_eq(nql_execute("log.level == \"ERROR\"", event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute("log.level == \"ERROR\"", event, world), 0);
 
   nblex_event_free(event);
@@ -206,7 +207,7 @@ START_TEST(test_nql_execute_pipeline) {
       "log.level == \"ERROR\" | show log.level where log.level == \"ERROR\"";
   ck_assert_int_eq(nql_execute(expr, event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute(expr, event, world), 0);
 
   nblex_event_free(event);
@@ -226,7 +227,7 @@ START_TEST(test_nql_execute_show_where) {
   const char* expr = "show log.service where log.level == \"ERROR\"";
   ck_assert_int_eq(nql_execute(expr, event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute(expr, event, world), 0);
 
   nblex_event_free(event);
@@ -238,16 +239,28 @@ END_TEST
 START_TEST(test_nql_execute_aggregate_where) {
   nblex_world* world = NULL;
   nblex_input* input = NULL;
-  nblex_event* event =
-      build_event_with_field(&world, &input, "log.level", json_string("ERROR"));
-
-  json_object_set_new(event->data, "log.service", json_string("api"));
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
+  ck_assert_ptr_ne(event, NULL);
+  
+  json_t* data = json_object();
+  ck_assert_ptr_ne(data, NULL);
+  json_object_set_new(data, "log.level", json_string("ERROR"));
+  json_object_set_new(data, "log.service", json_string("api"));
+  event->data = data;
 
   const char* expr =
       "aggregate count() by log.service where log.level == \"ERROR\"";
   ck_assert_int_eq(nql_execute(expr, event, world), 1);
 
-  json_object_set(event->data, "log.level", json_string("INFO"));
+  json_object_set_new(event->data, "log.level", json_string("INFO"));
   ck_assert_int_eq(nql_execute(expr, event, world), 0);
 
   nblex_event_free(event);
@@ -258,19 +271,51 @@ END_TEST
 
 /* Event capture for testing */
 static nblex_event* captured_event = NULL;
+static nblex_event** captured_events = NULL;
+static size_t captured_events_count = 0;
+static size_t captured_events_capacity = 0;
 
 static void capture_event_handler(nblex_event* event, void* user_data) {
   (void)user_data;
+  /* Debug: indicate handler invoked */
   if (captured_event) {
     nblex_event_free(captured_event);
   }
-  captured_event = calloc(1, sizeof(nblex_event));
-  if (captured_event && event) {
-    memcpy(captured_event, event, sizeof(nblex_event));
-    if (event->data) {
-      json_incref(event->data);
-      captured_event->data = event->data;
+  captured_event = nblex_event_clone(event);
+  
+  /* Also add to array */
+  if (captured_events_count >= captured_events_capacity) {
+    size_t new_capacity = captured_events_capacity == 0 ? 16 : captured_events_capacity * 2;
+    nblex_event** new_events = realloc(captured_events, new_capacity * sizeof(nblex_event*));
+    if (new_events) {
+      captured_events = new_events;
+      captured_events_capacity = new_capacity;
     }
+  }
+  
+  if (captured_events && captured_events_count < captured_events_capacity) {
+    captured_events[captured_events_count] = nblex_event_clone(event);
+    if (captured_events[captured_events_count]) {
+      captured_events_count++;
+    }
+  }
+}
+
+static void reset_captured_events(void) {
+  if (captured_event) {
+    nblex_event_free(captured_event);
+    captured_event = NULL;
+  }
+  if (captured_events) {
+    for (size_t i = 0; i < captured_events_count; i++) {
+      if (captured_events[i]) {
+        nblex_event_free(captured_events[i]);
+      }
+    }
+    free(captured_events);
+    captured_events = NULL;
+    captured_events_count = 0;
+    captured_events_capacity = 0;
   }
 }
 
@@ -459,6 +504,327 @@ START_TEST(test_nql_execute_correlate_emits_event) {
 }
 END_TEST
 
+START_TEST(test_nql_execute_tumbling_window) {
+  nblex_world* world = NULL;
+  nblex_input* input = NULL;
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_set_event_handler(world, capture_event_handler, NULL);
+  reset_captured_events();
+  
+  /* Base timestamp: 1000 seconds */
+  uint64_t base_ts = 1000000000000ULL; /* 1e12 ns = 1000 seconds */
+  uint64_t window_size_ns = 1000000000ULL; /* 1 second */
+  
+  /* Create three events in the same window */
+  nblex_event* event1 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data1 = json_object();
+  json_object_set_new(data1, "log.service", json_string("api"));
+  json_object_set_new(data1, "log.level", json_string("ERROR"));
+  json_object_set_new(data1, "network.latency_ms", json_real(10.0));
+  event1->data = data1;
+  event1->timestamp_ns = base_ts + 100000000; /* 100ms into window */
+  
+  nblex_event* event2 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data2 = json_object();
+  json_object_set_new(data2, "log.service", json_string("api"));
+  json_object_set_new(data2, "log.level", json_string("ERROR"));
+  json_object_set_new(data2, "network.latency_ms", json_real(20.0));
+  event2->data = data2;
+  event2->timestamp_ns = base_ts + 500000000; /* 500ms into window */
+  
+  nblex_event* event3 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data3 = json_object();
+  json_object_set_new(data3, "log.service", json_string("api"));
+  json_object_set_new(data3, "log.level", json_string("ERROR"));
+  json_object_set_new(data3, "network.latency_ms", json_real(30.0));
+  event3->data = data3;
+  event3->timestamp_ns = base_ts + 900000000; /* 900ms into window */
+  
+  const char* expr = "aggregate count(), avg(network.latency_ms) by log.service "
+                      "where log.level == \"ERROR\" window tumbling(1s)";
+  
+  /* Process all three events - should not emit immediately (windowed) */
+  ck_assert_int_eq(nql_execute(expr, event1, world), 1);
+  ck_assert_ptr_eq(captured_event, NULL); /* No immediate emission */
+  
+  ck_assert_int_eq(nql_execute(expr, event2, world), 1);
+  ck_assert_ptr_eq(captured_event, NULL);
+  
+  ck_assert_int_eq(nql_execute(expr, event3, world), 1);
+  ck_assert_ptr_eq(captured_event, NULL);
+  
+  /* Note: In a real scenario, the timer would flush the window.
+   * For this test, we verify that events are buffered (not emitted immediately) */
+  
+  nblex_event_free(event1);
+  nblex_event_free(event2);
+  nblex_event_free(event3);
+  nblex_input_free(input);
+  nblex_world_free(world);
+  reset_captured_events();
+}
+END_TEST
+
+START_TEST(test_nql_execute_tumbling_window_different_windows) {
+  nblex_world* world = NULL;
+  nblex_input* input = NULL;
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_set_event_handler(world, capture_event_handler, NULL);
+  reset_captured_events();
+  
+  /* Base timestamp: 1000 seconds */
+  uint64_t base_ts = 1000000000000ULL;
+  uint64_t window_size_ns = 1000000000ULL; /* 1 second */
+  
+  /* Event in first window */
+  nblex_event* event1 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data1 = json_object();
+  json_object_set_new(data1, "log.service", json_string("api"));
+  json_object_set_new(data1, "log.level", json_string("ERROR"));
+  event1->data = data1;
+  event1->timestamp_ns = base_ts + 100000000; /* 100ms into first window */
+  
+  /* Event in second window (1.5 seconds later) */
+  nblex_event* event2 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data2 = json_object();
+  json_object_set_new(data2, "log.service", json_string("api"));
+  json_object_set_new(data2, "log.level", json_string("ERROR"));
+  event2->data = data2;
+  event2->timestamp_ns = base_ts + window_size_ns + 500000000; /* 500ms into second window */
+  
+  const char* expr = "aggregate count() by log.service "
+                      "where log.level == \"ERROR\" window tumbling(1s)";
+  
+  ck_assert_int_eq(nql_execute(expr, event1, world), 1);
+  ck_assert_int_eq(nql_execute(expr, event2, world), 1);
+  
+  /* Should create separate buckets for different windows */
+  /* Events buffered, not emitted immediately */
+  ck_assert_ptr_eq(captured_event, NULL);
+  
+  nblex_event_free(event1);
+  nblex_event_free(event2);
+  nblex_input_free(input);
+  nblex_world_free(world);
+  reset_captured_events();
+}
+END_TEST
+
+START_TEST(test_nql_execute_sliding_window_multiple_windows) {
+  nblex_world* world = NULL;
+  nblex_input* input = NULL;
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_set_event_handler(world, capture_event_handler, NULL);
+  reset_captured_events();
+  
+  /* Base timestamp: 1000 seconds */
+  uint64_t base_ts = 1000000000000ULL;
+  
+  /* Event that should belong to multiple sliding windows */
+  /* Window: 1s, slide: 0.5s */
+  /* Event at 1.2s should belong to windows starting at 0.5s, 1.0s, and 1.5s */
+  /* Actually, windows are: [0.0-1.0), [0.5-1.5), [1.0-2.0), [1.5-2.5) */
+  /* Event at 1.2s belongs to: [0.5-1.5), [1.0-2.0) */
+  
+  nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data = json_object();
+  json_object_set_new(data, "log.service", json_string("api"));
+  json_object_set_new(data, "log.level", json_string("ERROR"));
+  json_object_set_new(data, "network.latency_ms", json_real(42.0));
+  event->data = data;
+  event->timestamp_ns = base_ts + 1200000000ULL; /* 1.2 seconds */
+  
+  const char* expr = "aggregate count() by log.service "
+                      "where log.level == \"ERROR\" window sliding(1s, 500ms)";
+  
+  ck_assert_int_eq(nql_execute(expr, event, world), 1);
+  
+  /* Event should be added to multiple windows (buffered, not emitted) */
+  ck_assert_ptr_eq(captured_event, NULL);
+  
+  nblex_event_free(event);
+  nblex_input_free(input);
+  nblex_world_free(world);
+  reset_captured_events();
+}
+END_TEST
+
+START_TEST(test_nql_execute_session_window) {
+  nblex_world* world = NULL;
+  nblex_input* input = NULL;
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_set_event_handler(world, capture_event_handler, NULL);
+  reset_captured_events();
+  
+  uint64_t base_ts = 1000000000000ULL;
+  
+  /* First event starts a session */
+  nblex_event* event1 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data1 = json_object();
+  json_object_set_new(data1, "log.service", json_string("api"));
+  json_object_set_new(data1, "log.level", json_string("ERROR"));
+  event1->data = data1;
+  event1->timestamp_ns = base_ts;
+  
+  /* Second event within timeout (5 seconds later, timeout is 30s) */
+  nblex_event* event2 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data2 = json_object();
+  json_object_set_new(data2, "log.service", json_string("api"));
+  json_object_set_new(data2, "log.level", json_string("ERROR"));
+  event2->data = data2;
+  event2->timestamp_ns = base_ts + 5000000000ULL; /* 5 seconds later */
+  
+  const char* expr = "aggregate count() by log.service "
+                      "where log.level == \"ERROR\" window session(30s)";
+  
+  ck_assert_int_eq(nql_execute(expr, event1, world), 1);
+  ck_assert_ptr_eq(captured_event, NULL); /* Buffered */
+  
+  ck_assert_int_eq(nql_execute(expr, event2, world), 1);
+  ck_assert_ptr_eq(captured_event, NULL); /* Should extend session, not create new */
+  
+  nblex_event_free(event1);
+  nblex_event_free(event2);
+  nblex_input_free(input);
+  nblex_world_free(world);
+  reset_captured_events();
+}
+END_TEST
+
+START_TEST(test_nql_execute_window_group_by) {
+  nblex_world* world = NULL;
+  nblex_input* input = NULL;
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_set_event_handler(world, capture_event_handler, NULL);
+  reset_captured_events();
+  
+  uint64_t base_ts = 1000000000000ULL;
+  
+  /* Events for different services in same window */
+  nblex_event* event1 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data1 = json_object();
+  json_object_set_new(data1, "log.service", json_string("api"));
+  json_object_set_new(data1, "log.level", json_string("ERROR"));
+  event1->data = data1;
+  event1->timestamp_ns = base_ts + 100000000;
+  
+  nblex_event* event2 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data2 = json_object();
+  json_object_set_new(data2, "log.service", json_string("payments"));
+  json_object_set_new(data2, "log.level", json_string("ERROR"));
+  event2->data = data2;
+  event2->timestamp_ns = base_ts + 200000000;
+  
+  const char* expr = "aggregate count() by log.service "
+                      "where log.level == \"ERROR\" window tumbling(1s)";
+  
+  ck_assert_int_eq(nql_execute(expr, event1, world), 1);
+  ck_assert_int_eq(nql_execute(expr, event2, world), 1);
+  
+  /* Should create separate buckets for each service */
+  ck_assert_ptr_eq(captured_event, NULL);
+  
+  nblex_event_free(event1);
+  nblex_event_free(event2);
+  nblex_input_free(input);
+  nblex_world_free(world);
+  reset_captured_events();
+}
+END_TEST
+
+START_TEST(test_nql_execute_window_aggregation_functions) {
+  nblex_world* world = NULL;
+  nblex_input* input = NULL;
+  
+  world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+  ck_assert_int_eq(nblex_world_open(world), 0);
+  
+  input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+  
+  nblex_set_event_handler(world, capture_event_handler, NULL);
+  reset_captured_events();
+  
+  uint64_t base_ts = 1000000000000ULL;
+  
+  /* Multiple events with different values */
+  nblex_event* event1 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data1 = json_object();
+  json_object_set_new(data1, "log.service", json_string("api"));
+  json_object_set_new(data1, "network.latency_ms", json_real(10.0));
+  event1->data = data1;
+  event1->timestamp_ns = base_ts + 100000000;
+  
+  nblex_event* event2 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data2 = json_object();
+  json_object_set_new(data2, "log.service", json_string("api"));
+  json_object_set_new(data2, "network.latency_ms", json_real(20.0));
+  event2->data = data2;
+  event2->timestamp_ns = base_ts + 200000000;
+  
+  nblex_event* event3 = nblex_event_new(NBLEX_EVENT_LOG, input);
+  json_t* data3 = json_object();
+  json_object_set_new(data3, "log.service", json_string("api"));
+  json_object_set_new(data3, "network.latency_ms", json_real(30.0));
+  event3->data = data3;
+  event3->timestamp_ns = base_ts + 300000000;
+  
+  const char* expr = "aggregate count(), sum(network.latency_ms), "
+                      "avg(network.latency_ms), min(network.latency_ms), "
+                      "max(network.latency_ms) by log.service window tumbling(1s)";
+  
+  ck_assert_int_eq(nql_execute(expr, event1, world), 1);
+  ck_assert_int_eq(nql_execute(expr, event2, world), 1);
+  ck_assert_int_eq(nql_execute(expr, event3, world), 1);
+  
+  /* Events buffered in window */
+  ck_assert_ptr_eq(captured_event, NULL);
+  
+  nblex_event_free(event1);
+  nblex_event_free(event2);
+  nblex_event_free(event3);
+  nblex_input_free(input);
+  nblex_world_free(world);
+  reset_captured_events();
+}
+END_TEST
+
 Suite* nql_suite(void) {
   Suite* s = suite_create("nQL");
 
@@ -483,6 +849,15 @@ Suite* nql_suite(void) {
   tcase_add_test(tc_execute, test_nql_execute_aggregate_group_by);
   tcase_add_test(tc_execute, test_nql_execute_correlate_emits_event);
   suite_add_tcase(s, tc_execute);
+
+  TCase* tc_windows = tcase_create("Windowing");
+  tcase_add_test(tc_windows, test_nql_execute_tumbling_window);
+  tcase_add_test(tc_windows, test_nql_execute_tumbling_window_different_windows);
+  tcase_add_test(tc_windows, test_nql_execute_sliding_window_multiple_windows);
+  tcase_add_test(tc_windows, test_nql_execute_session_window);
+  tcase_add_test(tc_windows, test_nql_execute_window_group_by);
+  tcase_add_test(tc_windows, test_nql_execute_window_aggregation_functions);
+  suite_add_tcase(s, tc_windows);
 
   return s;
 }

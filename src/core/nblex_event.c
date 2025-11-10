@@ -37,6 +37,24 @@ void nblex_event_free(nblex_event* event) {
   free(event);
 }
 
+/* Clone an event. The event struct is duplicated, the JSON data (if any)
+ * is incref'd. The input pointer is copied (not cloned). The returned
+ * event must be freed with nblex_event_free().
+ */
+nblex_event* nblex_event_clone(nblex_event* src) {
+  if (!src) return NULL;
+  nblex_event* dst = calloc(1, sizeof(nblex_event));
+  if (!dst) return NULL;
+  dst->type = src->type;
+  dst->timestamp_ns = src->timestamp_ns;
+  dst->input = src->input;
+  dst->data = src->data;
+  if (dst->data) {
+    json_incref(dst->data);
+  }
+  return dst;
+}
+
 void nblex_event_emit(nblex_world* world, nblex_event* event) {
   if (!world || !event) {
     return;

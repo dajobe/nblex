@@ -139,20 +139,12 @@ static int add_to_buffer(nblex_event_buffer_entry** buffer_head,
     return -1;
   }
 
-  /* Duplicate event data */
-  nblex_event* event_copy = nblex_malloc(sizeof(nblex_event));
+  /* Duplicate event using clone helper to properly manage JSON refs */
+  nblex_event* event_copy = nblex_event_clone(event);
   if (!event_copy) {
     nblex_free(entry);
     return -1;
   }
-
-  memcpy(event_copy, event, sizeof(nblex_event));
-
-  /* Increment reference count for JSON data */
-  if (event_copy->data) {
-    json_incref(event_copy->data);
-  }
-
   entry->event = event_copy;
   entry->next = *buffer_head;
   *buffer_head = entry;
