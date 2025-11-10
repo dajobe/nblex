@@ -598,6 +598,23 @@ static nql_query_t* parse_aggregate(nql_parser_t* parser) {
         nql_free(query);
         return NULL;
       }
+    } else if (match_keyword(parser, "session")) {
+      window->type = NQL_WINDOW_SESSION;
+      if (!consume_char(parser, '(')) {
+        parser_set_error(parser, "expected '(' after session");
+        nql_free(query);
+        return NULL;
+      }
+      window->timeout_ms = parse_duration(parser);
+      if (parser->error_msg) {
+        nql_free(query);
+        return NULL;
+      }
+      if (!consume_char(parser, ')')) {
+        parser_set_error(parser, "expected ')' after session window");
+        nql_free(query);
+        return NULL;
+      }
     } else {
       window->type = NQL_WINDOW_TUMBLING;
       window->size_ms = parse_duration(parser);

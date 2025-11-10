@@ -37,7 +37,8 @@ typedef enum {
 typedef enum {
   NQL_WINDOW_NONE,
   NQL_WINDOW_TUMBLING,
-  NQL_WINDOW_SLIDING
+  NQL_WINDOW_SLIDING,
+  NQL_WINDOW_SESSION
 } nql_window_type_t;
 
 typedef struct {
@@ -48,8 +49,9 @@ typedef struct {
 
 typedef struct {
   nql_window_type_t type;
-  uint64_t size_ms;
-  uint64_t slide_ms;
+  uint64_t size_ms;       /* For tumbling/sliding windows */
+  uint64_t slide_ms;      /* For sliding windows */
+  uint64_t timeout_ms;    /* For session windows - gap timeout */
 } nql_window_t;
 
 typedef struct {

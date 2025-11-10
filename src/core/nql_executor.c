@@ -31,7 +31,8 @@ typedef struct nql_agg_bucket_s {
     
     uint64_t window_start_ns;   /* Window start timestamp */
     uint64_t window_end_ns;     /* Window end timestamp */
-    
+    uint64_t last_event_ns;     /* Last event time for session windows */
+
     struct nql_agg_bucket_s* next;
 } nql_agg_bucket_t;
 
@@ -360,11 +361,22 @@ static void window_flush_cb(uv_timer_t* handle) {
     
     uint64_t now = nblex_timestamp_now();
     uint64_t window_size_ns = agg->window.size_ms * 1000000ULL;
-    
+
     /* Flush all buckets */
     nql_agg_bucket_t* bucket = agg_state->buckets;
     while (bucket) {
-        if (bucket->window_end_ns <= now) {
+        bool should_flush = false;
+
+        if (agg->window.type == NQL_WINDOW_SESSION) {
+            /* Session window: flush if timeout since last event */
+            uint64_t timeout_ns = agg->window.timeout_ms * 1000000ULL;
+            should_flush = (now - bucket->last_event_ns) >= timeout_ns && bucket->count > 0;
+        } else {
+            /* Tumbling/sliding window: flush if window end reached */
+            should_flush = bucket->window_end_ns <= now;
+        }
+
+        if (should_flush) {
             nblex_event* result_event = create_agg_result_event(bucket, agg, world);
             if (result_event) {
                 nblex_event_emit(world, result_event);
@@ -448,9 +460,18 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
         if (agg_state->window_timer) {
             uv_timer_init(world->loop, agg_state->window_timer);
             agg_state->window_timer->data = agg_state;
-            
-            uint64_t interval_ms = agg->window.slide_ms > 0 ?
-                                   agg->window.slide_ms : agg->window.size_ms;
+
+            uint64_t interval_ms;
+            if (agg->window.type == NQL_WINDOW_SESSION) {
+                /* Session window: check frequently for timeout */
+                interval_ms = agg->window.timeout_ms / 2;
+                if (interval_ms < 100) interval_ms = 100;
+            } else {
+                /* Tumbling/sliding window */
+                interval_ms = agg->window.slide_ms > 0 ?
+                              agg->window.slide_ms : agg->window.size_ms;
+            }
+
             uv_timer_start(agg_state->window_timer, window_flush_cb,
                           interval_ms, interval_ms);
             agg_state->timer_active = true;
@@ -507,14 +528,21 @@ static nql_agg_bucket_t* get_agg_bucket(nql_agg_state_t* agg_state,
     
     uint64_t now = nblex_timestamp_now();
     nql_aggregate_t* agg = agg_state->query->data.aggregate;
-    if (agg->window.type != NQL_WINDOW_NONE) {
+    if (agg->window.type == NQL_WINDOW_SESSION) {
+        /* Session window: start now, no fixed end */
+        bucket->window_start_ns = now;
+        bucket->window_end_ns = UINT64_MAX;
+        bucket->last_event_ns = now;
+    } else if (agg->window.type != NQL_WINDOW_NONE) {
         uint64_t window_size_ns = agg->window.size_ms * 1000000ULL;
         bucket->window_start_ns = now;
         bucket->window_end_ns = now + window_size_ns;
+        bucket->last_event_ns = now;
     } else {
         /* No window - set to max value to never expire */
         bucket->window_start_ns = now;
         bucket->window_end_ns = UINT64_MAX;
+        bucket->last_event_ns = now;
     }
     
     bucket->next = agg_state->buckets;
@@ -558,7 +586,12 @@ static int execute_aggregate(nql_query_t* query, nblex_event* event, nblex_world
     
     /* Update aggregations */
     bucket->count++;
-    
+
+    /* Update last event time for session windows */
+    if (agg->window.type == NQL_WINDOW_SESSION) {
+        bucket->last_event_ns = event->timestamp_ns ? event->timestamp_ns : nblex_timestamp_now();
+    }
+
     for (size_t i = 0; i < agg->funcs_count; i++) {
         nql_agg_func_t* func = &agg->funcs[i];
         

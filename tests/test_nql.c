@@ -5,20 +5,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-/* Feature test macros must be defined before any system headers */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
-#ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 600
-#endif
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE
-#endif
-
+/* Feature test macros - let nblex_internal.h handle platform-specific setup */
 #include <check.h>
 #include <string.h>
 #include "../src/nblex_internal.h"
@@ -381,6 +368,23 @@ START_TEST(test_nql_execute_aggregate_group_by) {
 }
 END_TEST
 
+START_TEST(test_nql_parse_session_window) {
+  const char* expr =
+      "aggregate count(), avg(network.latency_ms) by log.service "
+      "window session(30s)";
+  nql_query_t* query = nql_parse(expr);
+  ck_assert_ptr_ne(query, NULL);
+  ck_assert_int_eq(query->type, NQL_QUERY_AGGREGATE);
+
+  nql_aggregate_t* agg = query->data.aggregate;
+  ck_assert_ptr_ne(agg, NULL);
+  ck_assert_int_eq(agg->window.type, NQL_WINDOW_SESSION);
+  ck_assert_uint_eq(agg->window.timeout_ms, 30 * 1000);
+
+  nql_free(query);
+}
+END_TEST
+
 START_TEST(test_nql_execute_correlate_emits_event) {
   nblex_world* world = NULL;
   nblex_input* input = NULL;
@@ -455,6 +459,7 @@ Suite* nql_suite(void) {
   tcase_add_test(tc_parse, test_nql_parse_correlate_default_window);
   tcase_add_test(tc_parse, test_nql_parse_show_fields);
   tcase_add_test(tc_parse, test_nql_parse_ex_error);
+  tcase_add_test(tc_parse, test_nql_parse_session_window);
   suite_add_tcase(s, tc_parse);
 
   TCase* tc_execute = tcase_create("Execute");

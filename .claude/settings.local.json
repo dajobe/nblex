@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./build/tests/test_nql:*)",
+      "Bash(cmake:*)",
+      "Bash(make:*)",
+      "Bash(git stash:*)",
+      "Bash(./build/tests/test_filters)",
+      "Bash(sw_vers:*)",
+      "Bash(find:*)",
+      "Bash(echo:*)",
+      "Bash(gcc:*)",
+      "Bash(/tmp/test:*)",
+      "Bash(./tests/test_filters)",
+      "Bash(./tests/test_nql:*)",
+      "Bash(./tests/test_parsers)",
+      "Bash(./tests/test_file_input)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
