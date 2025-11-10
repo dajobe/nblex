@@ -9,19 +9,33 @@
 #ifndef NBLEX_INTERNAL_H
 #define NBLEX_INTERNAL_H
 
+/* Feature test macros must be defined before any system headers */
+#ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
+#endif
+#define _DEFAULT_SOURCE
 #define _GNU_SOURCE
+#define _BSD_SOURCE
 #define _DARWIN_C_SOURCE
 
-#include "nblex/nblex.h"
-#include <pthread.h>
-#include <uv.h>
-#include <jansson.h>
+/* For pcap compatibility on Linux - enables BSD types in pcap.h */
+#ifdef __linux__
+#ifndef __FAVOR_BSD
+#define __FAVOR_BSD
+#endif
+#endif
+
+/* Include system types before pcap to ensure BSD types are available */
 #include <sys/types.h>
-#include <pcap.h>
+#include <pthread.h>
+#include <time.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <time.h>
+
+#include "nblex/nblex.h"
+#include <uv.h>
+#include <jansson.h>
+#include <pcap.h>
 
 /* Forward declarations */
 typedef struct nblex_input_vtable_s nblex_input_vtable;
