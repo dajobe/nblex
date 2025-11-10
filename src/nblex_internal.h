@@ -31,6 +31,10 @@
 #endif
 #endif
 
+/* Include pthread.h early with GNU/POSIX macros for rwlock support */
+#include <pthread.h>
+#include <time.h>
+
 /* BSD protocol structure macros - define before network headers */
 #ifndef __FAVOR_BSD
 #define __FAVOR_BSD
@@ -50,8 +54,6 @@
 #include <sys/_types/_u_int.h>
 #endif
 
-#include <pthread.h>
-#include <time.h>
 #include <stdbool.h>
 #include <stdint.h>
 
