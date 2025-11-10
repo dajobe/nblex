@@ -26,6 +26,7 @@
 /* Forward declarations for functions not in public API */
 json_t* nblex_parse_logfmt_line(const char* line);
 json_t* nblex_parse_syslog_line(const char* line);
+json_t* nblex_parse_nginx_line(const char* line);
 
 /* Test suite declaration */
 Suite* parsers_suite(void);
@@ -96,6 +97,24 @@ START_TEST(test_syslog_parser) {
 }
 END_TEST
 
+START_TEST(test_nginx_parser) {
+    /* Test basic nginx log line */
+    json_t* result = nblex_parse_nginx_line("127.0.0.1 - - [09/Nov/2025:17:28:06 -0800] \"GET / HTTP/2.0\" 403 146 \"-\" \"curl/8.7.1\"");
+    ck_assert_ptr_ne(result, NULL);
+    ck_assert(json_is_object(result));
+
+    json_t* remote_addr = json_object_get(result, "remote_addr");
+    ck_assert_ptr_ne(remote_addr, NULL);
+    ck_assert_str_eq(json_string_value(remote_addr), "127.0.0.1");
+
+    json_t* status = json_object_get(result, "status");
+    ck_assert_ptr_ne(status, NULL);
+    ck_assert_int_eq(json_integer_value(status), 403);
+
+    json_decref(result);
+}
+END_TEST
+
 Suite* parsers_suite(void) {
     Suite* s = suite_create("Parsers");
 
@@ -103,6 +122,7 @@ Suite* parsers_suite(void) {
     tcase_add_test(tc_core, test_json_parser);
     tcase_add_test(tc_core, test_logfmt_parser);
     tcase_add_test(tc_core, test_syslog_parser);
+    tcase_add_test(tc_core, test_nginx_parser);
     suite_add_tcase(s, tc_core);
 
     return s;
