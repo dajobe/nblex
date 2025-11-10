@@ -9,14 +9,6 @@
 #ifndef NBLEX_INTERNAL_H
 #define NBLEX_INTERNAL_H
 
-/* BSD protocol structure macros - MUST be first, before ANY includes */
-#ifndef __FAVOR_BSD
-#define __FAVOR_BSD
-#endif
-#ifndef __USE_BSD
-#define __USE_BSD
-#endif
-
 /* Feature test macros must be defined before any system headers */
 /* On macOS/Darwin, don't define feature test macros - the defaults are correct */
 #ifndef __APPLE__
@@ -37,6 +29,14 @@
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
 #endif
+#endif
+
+/* BSD protocol structure macros - define before network headers */
+#ifndef __FAVOR_BSD
+#define __FAVOR_BSD
+#endif
+#ifndef __USE_BSD
+#define __USE_BSD
 #endif
 
 /* Include system types before pcap to ensure BSD types are available */
