@@ -287,6 +287,11 @@ void nblex_event_free(nblex_event* event);
  * the world's loop can be safely drained and closed. Implemented in
  * src/core/nql_executor.c and invoked by nblex_world_free().
  */
+/* Important: exec contexts do NOT retain pointers to parsed nql_query_t
+ * instances. Callers may free parsed queries after `nql_execute()` returns.
+ * The executor stores only lightweight information (for example the
+ * query type and an optional cached query string) in the internal contexts.
+ */
 void nblex_exec_contexts_shutdown_world(nblex_world* world);
 void nblex_event_emit(nblex_world* world, nblex_event* event);
 /* Clone an event: deep copy the event struct, incref JSON data if present.
