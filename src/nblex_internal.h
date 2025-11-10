@@ -180,10 +180,13 @@ struct nblex_output_config_s {
  */
 typedef struct {
   char* path;
+  char* dir_path;      /* Directory path for watching */
+  char* filename;      /* Filename for filtering events */
   FILE* file;
   uv_fs_event_t fs_event;
   uv_timer_t poll_timer;
   bool watching;
+  bool use_fs_event;   /* Whether to use fs_event or fallback to polling */
 
   /* Line buffer */
   char* line_buffer;
