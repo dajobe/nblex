@@ -78,7 +78,17 @@ void nblex_world_free(nblex_world* world) {
     nblex_world_stop(world);
   }
 
-  /* Free correlation engine */
+  /* Stop all inputs explicitly to close their handles */
+  if (world->started && world->inputs) {
+    for (size_t i = 0; i < world->inputs_count; i++) {
+      nblex_input* input = world->inputs[i];
+      if (input && input->vtable && input->vtable->stop) {
+        input->vtable->stop(input);
+      }
+    }
+  }
+
+  /* Free correlation engine (this closes its timer handle) */
   if (world->correlation) {
     nblex_correlation_free(world->correlation);
   }
@@ -95,6 +105,11 @@ void nblex_world_free(nblex_world* world) {
 
   /* Close event loop */
   if (world->loop) {
+    /* Run the loop once more to process any pending close callbacks */
+    /* This is required before uv_loop_close() can succeed */
+    uv_run(world->loop, UV_RUN_ONCE);
+    
+    /* Now it's safe to close the loop */
     uv_loop_close(world->loop);
     free(world->loop);
   }
