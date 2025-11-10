@@ -6,6 +6,27 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+/* Feature test macros must be defined before any system headers */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE
+#endif
+
+/* For pcap compatibility on Linux - enables BSD types in pcap.h */
+#ifdef __linux__
+#ifndef __FAVOR_BSD
+#define __FAVOR_BSD
+#endif
+#endif
+
 #define PCRE2_CODE_UNIT_WIDTH 8
 #include <pcre2.h>
 

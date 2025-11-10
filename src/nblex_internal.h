@@ -13,10 +13,19 @@
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #endif
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+/* _BSD_SOURCE is deprecated in glibc 2.20+, but needed for older versions */
+#ifndef _BSD_SOURCE
 #define _BSD_SOURCE
+#endif
+#ifndef _DARWIN_C_SOURCE
 #define _DARWIN_C_SOURCE
+#endif
 
 /* For pcap compatibility on Linux - enables BSD types in pcap.h */
 #ifdef __linux__
