@@ -42,6 +42,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+/* TCP ECN flags - not always defined in system headers */
+#ifndef TH_ECE
+#define TH_ECE 0x40  /* ECN-Echo */
+#endif
+#ifndef TH_CWR
+#define TH_CWR 0x80  /* Congestion Window Reduced */
+#endif
+
 #include "../nblex_internal.h"
 
 /* Forward declarations */

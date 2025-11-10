@@ -406,6 +406,9 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
         while (ctx) {
             if (ctx->query_string && strcmp(ctx->query_string, query_str) == 0 &&
                 ctx->world == world && ctx->state.agg_state) {
+                /* Update query reference to point to the new query object */
+                ctx->state.agg_state->query = query;
+                ctx->query = query;
                 return ctx->state.agg_state;
             }
             ctx = ctx->next;
@@ -504,9 +507,15 @@ static nql_agg_bucket_t* get_agg_bucket(nql_agg_state_t* agg_state,
     
     uint64_t now = nblex_timestamp_now();
     nql_aggregate_t* agg = agg_state->query->data.aggregate;
-    uint64_t window_size_ns = agg->window.size_ms * 1000000ULL;
-    bucket->window_start_ns = now;
-    bucket->window_end_ns = now + window_size_ns;
+    if (agg->window.type != NQL_WINDOW_NONE) {
+        uint64_t window_size_ns = agg->window.size_ms * 1000000ULL;
+        bucket->window_start_ns = now;
+        bucket->window_end_ns = now + window_size_ns;
+    } else {
+        /* No window - set to max value to never expire */
+        bucket->window_start_ns = now;
+        bucket->window_end_ns = UINT64_MAX;
+    }
     
     bucket->next = agg_state->buckets;
     agg_state->buckets = bucket;

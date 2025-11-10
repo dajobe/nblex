@@ -10,14 +10,17 @@
 #define NBLEX_INTERNAL_H
 
 /* Feature test macros must be defined before any system headers */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #ifndef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #endif
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 600
+#endif
 #ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
-#endif
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
 #endif
 /* _BSD_SOURCE is deprecated in glibc 2.20+, but needed for older versions */
 #ifndef _BSD_SOURCE
@@ -43,7 +46,25 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* Define BSD types if not available (needed for pcap) */
+#ifndef _UCHAR_DEFINED
+typedef unsigned char u_char;
+#define _UCHAR_DEFINED
+#endif
+#ifndef _USHORT_DEFINED
+typedef unsigned short u_short;
+#define _USHORT_DEFINED
+#endif
+#ifndef _UINT_DEFINED
+typedef unsigned int u_int;
+#define _UINT_DEFINED
+#endif
+
 #include "nblex/nblex.h"
+
+/* Ensure pthread types are available for uv.h */
+#include <pthread.h>
+
 #include <uv.h>
 #include <jansson.h>
 #include <pcap.h>
@@ -241,9 +262,7 @@ void nblex_event_emit(nblex_world* world, nblex_event* event);
 
 /* Timestamp */
 static inline uint64_t nblex_timestamp_now(void) {
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
-  return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+  return uv_hrtime();
 }
 
 /* Inputs */

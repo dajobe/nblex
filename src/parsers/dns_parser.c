@@ -6,7 +6,6 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-#include <sys/types.h>  /* For BSD type definitions */
 #include "../nblex_internal.h"
 #include <stdlib.h>
 #include <string.h>

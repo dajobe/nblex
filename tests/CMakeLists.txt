@@ -2,6 +2,7 @@
 
 # Find Check framework
 find_library(CHECK_LIBRARY check REQUIRED)
+find_library(SUBUNIT_LIBRARY subunit REQUIRED)
 if(NOT CHECK_LIBRARY)
     message(FATAL_ERROR "Check framework not found")
 endif()
@@ -21,13 +22,13 @@ include_directories(
 
 # Test executables
 add_executable(test_parsers test_parsers.c)
-target_link_libraries(test_parsers nblex ${CHECK_LIBRARY})
+target_link_libraries(test_parsers nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
 add_executable(test_filters test_filters.c)
-target_link_libraries(test_filters nblex ${CHECK_LIBRARY})
+target_link_libraries(test_filters nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
 add_executable(test_nql test_nql.c)
-target_link_libraries(test_nql nblex ${CHECK_LIBRARY})
+target_link_libraries(test_nql nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
 # Register tests
 add_test(NAME parsers COMMAND test_parsers)
