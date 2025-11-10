@@ -24,6 +24,7 @@ static void print_usage(const char* program) {
   printf("Usage: %s [OPTIONS]\n\n", program);
   printf("Options:\n");
   printf("  -l, --logs PATH         Monitor log file(s)\n");
+  printf("  -F, --format FORMAT     Log format (json|logfmt|syslog|nginx)\n");
   printf("  -n, --network IFACE     Monitor network interface\n");
   printf("  -f, --filter EXPR       Filter expression\n");
   printf("  -q, --query QUERY       nQL query expression\n");
@@ -36,6 +37,7 @@ static void print_usage(const char* program) {
   printf("\n");
   printf("Examples:\n");
   printf("  %s --logs /var/log/app.log --output json\n", program);
+  printf("  %s --logs /var/log/nginx/access.log --format nginx --output json\n", program);
   printf("  %s --logs /var/log/app.log --output file --output-file /tmp/events.jsonl\n", program);
   printf("  %s --logs /var/log/app.log --network eth0 --output http --output-url http://localhost:8080/events\n", program);
   printf("  %s --config /etc/nblex/config.yaml\n", program);
@@ -114,6 +116,7 @@ static void event_handler_query(nblex_event* event, void* user_data) {
 
 int main(int argc, char** argv) {
   const char* log_path = NULL;
+  const char* log_format = NULL;
   const char* network_iface = NULL;
   const char* filter = NULL;
   const char* query = NULL;
@@ -124,6 +127,7 @@ int main(int argc, char** argv) {
 
   static struct option long_options[] = {
     {"logs",       required_argument, 0, 'l'},
+    {"format",     required_argument, 0, 'F'},
     {"network",   required_argument, 0, 'n'},
     {"filter",    required_argument, 0, 'f'},
     {"query",     required_argument, 0, 'q'},
@@ -139,11 +143,14 @@ int main(int argc, char** argv) {
   int opt;
   int option_index = 0;
 
-  while ((opt = getopt_long(argc, argv, "l:n:f:q:o:O:U:c:vh",
+  while ((opt = getopt_long(argc, argv, "l:F:n:f:q:o:O:U:c:vh",
                             long_options, &option_index)) != -1) {
     switch (opt) {
       case 'l':
         log_path = optarg;
+        break;
+      case 'F':
+        log_format = optarg;
         break;
       case 'n':
         network_iface = optarg;
@@ -228,9 +235,54 @@ int main(int argc, char** argv) {
         return 1;
       }
 
-      /* Set format to JSON by default */
-      nblex_input_set_format(log_input, NBLEX_FORMAT_JSON);
-      printf("Monitoring logs: %s (format: json)\n", log_path);
+      /* Set format based on command-line argument, auto-detect, or default to JSON */
+      nblex_log_format format = NBLEX_FORMAT_JSON;
+      const char* format_str = "json";
+      
+      if (log_format) {
+        if (strcmp(log_format, "json") == 0) {
+          format = NBLEX_FORMAT_JSON;
+          format_str = "json";
+        } else if (strcmp(log_format, "logfmt") == 0) {
+          format = NBLEX_FORMAT_LOGFMT;
+          format_str = "logfmt";
+        } else if (strcmp(log_format, "syslog") == 0) {
+          format = NBLEX_FORMAT_SYSLOG;
+          format_str = "syslog";
+        } else if (strcmp(log_format, "nginx") == 0) {
+          format = NBLEX_FORMAT_NGINX;
+          format_str = "nginx";
+        } else {
+          fprintf(stderr, "Error: Unknown log format '%s'\n", log_format);
+          fprintf(stderr, "       Supported formats: json, logfmt, syslog, nginx\n");
+          nblex_world_free(world);
+          if (config) nblex_config_free(config);
+          return 1;
+        }
+      } else {
+        /* Auto-detect format from path */
+        format = nblex_detect_log_format(log_path);
+        switch (format) {
+          case NBLEX_FORMAT_JSON:
+            format_str = "json";
+            break;
+          case NBLEX_FORMAT_LOGFMT:
+            format_str = "logfmt";
+            break;
+          case NBLEX_FORMAT_SYSLOG:
+            format_str = "syslog";
+            break;
+          case NBLEX_FORMAT_NGINX:
+            format_str = "nginx";
+            break;
+          default:
+            format_str = "json";
+            break;
+        }
+      }
+      
+      nblex_input_set_format(log_input, format);
+      printf("Monitoring logs: %s (format: %s)\n", log_path, format_str);
     }
 
     if (network_iface) {

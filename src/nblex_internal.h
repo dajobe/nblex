@@ -272,6 +272,7 @@ static inline uint64_t nblex_timestamp_now(void) {
 nblex_input* nblex_input_new(nblex_world* world, nblex_input_type type);
 void nblex_input_free(nblex_input* input);
 int nblex_world_add_input(nblex_world* world, nblex_input* input);
+nblex_log_format nblex_detect_log_format(const char* path);
 
 /* JSON parsing */
 json_t* nblex_parse_json_line(const char* line);
@@ -288,6 +289,7 @@ json_t* nblex_parse_dns_payload(const u_char* data, size_t data_len);
 /* Log parsing */
 json_t* nblex_parse_logfmt_line(const char* line);
 json_t* nblex_parse_syslog_line(const char* line);
+json_t* nblex_parse_nginx_line(const char* line);
 
 /* Regex parser */
 struct regex_parser_s;

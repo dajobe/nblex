@@ -90,6 +90,7 @@ typedef enum {
   NBLEX_FORMAT_JSON,        /* JSON format */
   NBLEX_FORMAT_LOGFMT,      /* Logfmt format */
   NBLEX_FORMAT_SYSLOG,      /* Syslog format */
+  NBLEX_FORMAT_NGINX,       /* Nginx combined log format */
   NBLEX_FORMAT_REGEX        /* Custom regex format */
 } nblex_log_format;
 

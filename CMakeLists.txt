@@ -120,6 +120,7 @@ set(NBLEX_SOURCES
     src/parsers/json_parser.c
     src/parsers/logfmt_parser.c
     src/parsers/syslog_parser.c
+    src/parsers/nginx_parser.c
     src/parsers/regex_parser.c
     src/parsers/http_parser.c
     src/parsers/dns_parser.c

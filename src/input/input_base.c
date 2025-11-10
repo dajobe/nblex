@@ -9,6 +9,51 @@
 #include "../nblex_internal.h"
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+
+/* Detect log format from file path */
+nblex_log_format nblex_detect_log_format(const char* path) {
+  if (!path) {
+    return NBLEX_FORMAT_JSON;  /* Default */
+  }
+
+  /* Check file extension first */
+  const char* ext = strrchr(path, '.');
+  if (ext) {
+    if (strcasecmp(ext, ".jsonl") == 0 || strcasecmp(ext, ".json") == 0) {
+      return NBLEX_FORMAT_JSON;
+    }
+  }
+
+  /* Check path for keywords (case-insensitive) */
+  char* path_lower = strdup(path);
+  if (path_lower) {
+    /* Convert to lowercase for comparison */
+    for (char* p = path_lower; *p; p++) {
+      if (*p >= 'A' && *p <= 'Z') {
+        *p = *p - 'A' + 'a';
+      }
+    }
+
+    if (strstr(path_lower, "nginx") != NULL) {
+      free(path_lower);
+      return NBLEX_FORMAT_NGINX;
+    }
+    if (strstr(path_lower, "syslog") != NULL) {
+      free(path_lower);
+      return NBLEX_FORMAT_SYSLOG;
+    }
+    if (strstr(path_lower, "logfmt") != NULL) {
+      free(path_lower);
+      return NBLEX_FORMAT_LOGFMT;
+    }
+
+    free(path_lower);
+  }
+
+  /* Default to JSON */
+  return NBLEX_FORMAT_JSON;
+}
 
 nblex_input* nblex_input_new(nblex_world* world, nblex_input_type type) {
   if (!world) {

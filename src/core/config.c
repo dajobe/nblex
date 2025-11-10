@@ -337,14 +337,22 @@ int nblex_config_apply(nblex_config_t* config, nblex_world* world) {
 
         if (strcmp(input_cfg->type, "file") == 0 && input_cfg->path) {
             input = nblex_input_file_new(world, input_cfg->path);
-            if (input && input_cfg->format) {
-                /* Parse format string */
-                if (strcmp(input_cfg->format, "json") == 0) {
-                    nblex_input_set_format(input, NBLEX_FORMAT_JSON);
-                } else if (strcmp(input_cfg->format, "logfmt") == 0) {
-                    nblex_input_set_format(input, NBLEX_FORMAT_LOGFMT);
-                } else if (strcmp(input_cfg->format, "syslog") == 0) {
-                    nblex_input_set_format(input, NBLEX_FORMAT_SYSLOG);
+            if (input) {
+                if (input_cfg->format) {
+                    /* Parse format string */
+                    if (strcmp(input_cfg->format, "json") == 0) {
+                        nblex_input_set_format(input, NBLEX_FORMAT_JSON);
+                    } else if (strcmp(input_cfg->format, "logfmt") == 0) {
+                        nblex_input_set_format(input, NBLEX_FORMAT_LOGFMT);
+                    } else if (strcmp(input_cfg->format, "syslog") == 0) {
+                        nblex_input_set_format(input, NBLEX_FORMAT_SYSLOG);
+                    } else if (strcmp(input_cfg->format, "nginx") == 0) {
+                        nblex_input_set_format(input, NBLEX_FORMAT_NGINX);
+                    }
+                } else {
+                    /* Auto-detect format from path */
+                    nblex_log_format format = nblex_detect_log_format(input_cfg->path);
+                    nblex_input_set_format(input, format);
                 }
             }
         } else if (strcmp(input_cfg->type, "pcap") == 0 && input_cfg->interface) {

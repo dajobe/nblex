@@ -266,6 +266,24 @@ static void file_read_new_data(nblex_input* input) {
         event->data = json_object();
         json_object_set_new(event->data, "message", json_string(buffer));
       }
+    } else if (input->format == NBLEX_FORMAT_LOGFMT) {
+      event->data = nblex_parse_logfmt_line(buffer);
+      if (!event->data) {
+        event->data = json_object();
+        json_object_set_new(event->data, "message", json_string(buffer));
+      }
+    } else if (input->format == NBLEX_FORMAT_SYSLOG) {
+      event->data = nblex_parse_syslog_line(buffer);
+      if (!event->data) {
+        event->data = json_object();
+        json_object_set_new(event->data, "message", json_string(buffer));
+      }
+    } else if (input->format == NBLEX_FORMAT_NGINX) {
+      event->data = nblex_parse_nginx_line(buffer);
+      if (!event->data) {
+        event->data = json_object();
+        json_object_set_new(event->data, "message", json_string(buffer));
+      }
     } else {
       /* For other formats, create a simple JSON object with the raw line */
       event->data = json_object();
