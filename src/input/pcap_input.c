@@ -6,41 +6,13 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-/* Feature test macros must be defined before any system headers */
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE
-#endif
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#ifndef _BSD_SOURCE
-#define _BSD_SOURCE
-#endif
+/* nblex_internal.h provides all network headers with correct BSD macros */
+#include "../nblex_internal.h"
 
-/* For pcap compatibility on Linux - enables BSD types in pcap.h */
-/* Must be defined before <sys/types.h> is included */
-#ifdef __linux__
-#ifndef __FAVOR_BSD
-#define __FAVOR_BSD
-#endif
-#endif
-
-#include <sys/types.h>  /* For BSD type definitions */
-#include <pcap.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <netinet/ip.h>
-#include <netinet/tcp.h>
-#include <netinet/udp.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/if_ether.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 /* TCP ECN flags - not always defined in system headers */
 #ifndef TH_ECE
@@ -49,8 +21,6 @@
 #ifndef TH_CWR
 #define TH_CWR 0x80  /* Congestion Window Reduced */
 #endif
-
-#include "../nblex_internal.h"
 
 /* Forward declarations */
 static const nblex_input_vtable pcap_input_vtable;

@@ -9,7 +9,18 @@
 #ifndef NBLEX_INTERNAL_H
 #define NBLEX_INTERNAL_H
 
+/* BSD protocol structure macros - MUST be first, before ANY includes */
+#ifndef __FAVOR_BSD
+#define __FAVOR_BSD
+#endif
+#ifndef __USE_BSD
+#define __USE_BSD
+#endif
+
 /* Feature test macros must be defined before any system headers */
+/* On macOS/Darwin, don't define feature test macros - the defaults are correct */
+#ifndef __APPLE__
+/* Linux/BSD feature test macros */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -26,38 +37,38 @@
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
 #endif
-#ifndef _DARWIN_C_SOURCE
-#define _DARWIN_C_SOURCE
-#endif
-
-/* For pcap compatibility on Linux - enables BSD types in pcap.h */
-/* Must be defined before <sys/types.h> is included */
-#ifdef __linux__
-#ifndef __FAVOR_BSD
-#define __FAVOR_BSD
-#endif
 #endif
 
 /* Include system types before pcap to ensure BSD types are available */
 /* Order matters: sys/types.h must come after __FAVOR_BSD definition */
 #include <sys/types.h>
+
+/* On macOS, explicitly enable BSD types by including sys/_types/_u_char.h */
+#ifdef __APPLE__
+#include <sys/_types/_u_char.h>
+#include <sys/_types/_u_short.h>
+#include <sys/_types/_u_int.h>
+#endif
+
 #include <pthread.h>
 #include <time.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Define BSD types if not available (needed for pcap) */
-#ifndef _UCHAR_DEFINED
+/* Define BSD types if not available (needed for pcap on Linux) */
+#ifndef __APPLE__
+#if !defined(_UCHAR_DEFINED) && !defined(_U_CHAR_DEFINED)
 typedef unsigned char u_char;
 #define _UCHAR_DEFINED
 #endif
-#ifndef _USHORT_DEFINED
+#if !defined(_USHORT_DEFINED) && !defined(_U_SHORT_DEFINED)
 typedef unsigned short u_short;
 #define _USHORT_DEFINED
 #endif
-#ifndef _UINT_DEFINED
+#if !defined(_UINT_DEFINED) && !defined(_U_INT_DEFINED)
 typedef unsigned int u_int;
 #define _UINT_DEFINED
+#endif
 #endif
 
 #include "nblex/nblex.h"
@@ -68,6 +79,18 @@ typedef unsigned int u_int;
 #include <uv.h>
 #include <jansson.h>
 #include <pcap.h>
+
+/* Network protocol headers - after BSD macros are set */
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/if_ether.h>
+#ifdef __APPLE__
+#include <net/ethernet.h>
+#endif
 
 /* Forward declarations */
 typedef struct nblex_input_vtable_s nblex_input_vtable;

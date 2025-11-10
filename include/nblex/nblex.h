@@ -21,6 +21,8 @@
 #define NBLEX_H
 
 /* Feature test macros must be defined before any system headers */
+/* On macOS, don't define POSIX_C_SOURCE as it hides BSD types needed for network headers */
+#ifndef __APPLE__
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -32,6 +34,7 @@
 #endif
 #ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 #endif
 
 #ifdef __cplusplus

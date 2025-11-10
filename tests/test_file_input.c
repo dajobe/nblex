@@ -6,20 +6,7 @@
  * Licensed under the Apache License, Version 2.0
  */
 
-/* Feature test macros must be defined before any system headers */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#endif
-#ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 600
-#endif
-#ifndef _DEFAULT_SOURCE
-#define _DEFAULT_SOURCE
-#endif
-
+/* Feature test macros - let nblex_internal.h handle platform-specific setup */
 #include <check.h>
 #include <stdio.h>
 #include <stdlib.h>

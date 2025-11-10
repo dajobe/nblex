@@ -2,9 +2,12 @@
 
 # Find Check framework
 find_library(CHECK_LIBRARY check REQUIRED)
-find_library(SUBUNIT_LIBRARY subunit REQUIRED)
+find_library(SUBUNIT_LIBRARY subunit)
 if(NOT CHECK_LIBRARY)
     message(FATAL_ERROR "Check framework not found")
+endif()
+if(NOT SUBUNIT_LIBRARY)
+    set(SUBUNIT_LIBRARY "")
 endif()
 
 # Get Check include directories
