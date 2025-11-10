@@ -6,6 +6,21 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+/* Feature test macros must be defined before any system headers */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#define _DEFAULT_SOURCE
+#define _GNU_SOURCE
+#define _BSD_SOURCE
+
+/* For pcap compatibility on Linux - enables BSD types in pcap.h */
+#ifdef __linux__
+#ifndef __FAVOR_BSD
+#define __FAVOR_BSD
+#endif
+#endif
+
 #include <sys/types.h>  /* For BSD type definitions */
 #include <pcap.h>
 #include <stdlib.h>
