@@ -38,7 +38,17 @@ typedef struct nql_agg_bucket_s {
 
 /* Aggregation execution state */
 typedef struct nql_agg_state_s {
-    nql_query_t* query;         /* Reference to query AST */
+    /* Window configuration (extracted from query) */
+    nql_window_t window;
+    
+    /* Aggregation functions (copied from query) */
+    nql_agg_func_t* funcs;
+    size_t funcs_count;
+    
+    /* Group by fields (copied from query) */
+    char** group_by_fields;
+    size_t group_by_count;
+    
     nql_agg_bucket_t* buckets;  /* Linked list of buckets */
     size_t bucket_count;
     
@@ -125,20 +135,29 @@ static json_t* json_get_path(json_t* obj, const char* path) {
 }
 
 /* Helper: Extract group key values from event */
-static char** extract_group_keys(nql_aggregate_t* agg, nblex_event* event, size_t* count_out) {
-    if (!agg || !event || !event->data || agg->group_by_count == 0) {
+static char** extract_group_keys(nql_agg_state_t* agg_state, nblex_event* event, size_t* count_out) {
+    if (!agg_state || !event || !event->data) {
         *count_out = 0;
         return NULL;
     }
     
-    char** keys = calloc(agg->group_by_count, sizeof(char*));
+    if (agg_state->group_by_count == 0 || !agg_state->group_by_fields) {
+        *count_out = 0;
+        return NULL;
+    }
+    
+    char** keys = calloc(agg_state->group_by_count, sizeof(char*));
     if (!keys) {
         *count_out = 0;
         return NULL;
     }
     
-    for (size_t i = 0; i < agg->group_by_count; i++) {
-        json_t* value = json_get_path(event->data, agg->group_by_fields[i]);
+    for (size_t i = 0; i < agg_state->group_by_count; i++) {
+        if (!agg_state->group_by_fields[i]) {
+            keys[i] = strdup("null");
+            continue;
+        }
+        json_t* value = json_get_path(event->data, agg_state->group_by_fields[i]);
         if (value) {
             if (json_is_string(value)) {
                 keys[i] = strdup(json_string_value(value));
@@ -158,12 +177,21 @@ static char** extract_group_keys(nql_aggregate_t* agg, nblex_event* event, size_
         }
     }
     
-    *count_out = agg->group_by_count;
+    *count_out = agg_state->group_by_count;
     return keys;
 }
 
 /* Helper: Compare group keys */
 static int compare_group_keys(char** keys1, char** keys2, size_t count) {
+    /* Both NULL or both empty means same (no group by) */
+    if (count == 0) {
+        return 0;
+    }
+    
+    if (!keys1 || !keys2) {
+        return keys1 ? 1 : (keys2 ? -1 : 0);
+    }
+    
     for (size_t i = 0; i < count; i++) {
         int cmp = strcmp(keys1[i], keys2[i]);
         if (cmp != 0) {
@@ -202,7 +230,7 @@ static double get_numeric_value(json_t* obj, const char* field) {
 
 /* Helper: Create aggregation result event */
 static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
-                                            nql_aggregate_t* agg,
+                                            nql_agg_state_t* agg_state,
                                             nblex_world* world) {
     nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, NULL);
     if (!event) {
@@ -218,10 +246,10 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
     json_object_set_new(result, "nql_result_type", json_string("aggregation"));
     
     /* Add group keys */
-    if (bucket->group_keys_count > 0) {
+    if (bucket->group_keys_count > 0 && agg_state->group_by_count > 0 && agg_state->group_by_fields) {
         json_t* groups = json_object();
-        for (size_t i = 0; i < bucket->group_keys_count && i < agg->group_by_count; i++) {
-            json_object_set_new(groups, agg->group_by_fields[i],
+        for (size_t i = 0; i < bucket->group_keys_count && i < agg_state->group_by_count; i++) {
+            json_object_set_new(groups, agg_state->group_by_fields[i],
                                json_string(bucket->group_keys[i]));
         }
         json_object_set_new(result, "group", groups);
@@ -229,12 +257,13 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
     
     /* Add aggregation results */
     json_t* metrics = json_object();
-    for (size_t i = 0; i < agg->funcs_count; i++) {
-        nql_agg_func_t* func = &agg->funcs[i];
-        const char* func_name = NULL;
-        json_t* value = NULL;
-        
-        switch (func->type) {
+    if (agg_state->funcs && agg_state->funcs_count > 0) {
+        for (size_t i = 0; i < agg_state->funcs_count; i++) {
+            nql_agg_func_t* func = &agg_state->funcs[i];
+            const char* func_name = NULL;
+            json_t* value = NULL;
+            
+            switch (func->type) {
             case NQL_AGG_COUNT:
                 func_name = "count";
                 value = json_integer(bucket->count);
@@ -314,17 +343,18 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
                     value = json_integer(bucket->distinct_count);
                 }
                 break;
-        }
-        
-        if (func_name && value) {
-            json_object_set_new(metrics, func_name, value);
+            }
+            
+            if (func_name && value) {
+                json_object_set_new(metrics, func_name, value);
+            }
         }
     }
     
     json_object_set_new(result, "metrics", metrics);
     
     /* Window info */
-    if (agg->window.type != NQL_WINDOW_NONE) {
+    if (agg_state->window.type != NQL_WINDOW_NONE) {
         json_t* window_info = json_object();
         json_object_set_new(window_info, "start_ns", json_integer(bucket->window_start_ns));
         json_object_set_new(window_info, "end_ns", json_integer(bucket->window_end_ns));
@@ -335,14 +365,55 @@ static nblex_event* create_agg_result_event(nql_agg_bucket_t* bucket,
     return event;
 }
 
-/* Window flush callback */
-static void window_flush_cb(uv_timer_t* handle) {
-    nql_agg_state_t* agg_state = (nql_agg_state_t*)handle->data;
-    if (!agg_state || !agg_state->query || !agg_state->query->data.aggregate) {
+/* Helper: Free bucket resources */
+static void free_bucket_resources(nql_agg_bucket_t* bucket) {
+    if (!bucket) {
         return;
     }
     
-    nql_aggregate_t* agg = agg_state->query->data.aggregate;
+    if (bucket->group_keys) {
+        free_group_keys(bucket->group_keys, bucket->group_keys_count);
+        bucket->group_keys = NULL;
+    }
+    if (bucket->distinct_values) {
+        json_decref(bucket->distinct_values);
+        bucket->distinct_values = NULL;
+    }
+    if (bucket->percentile_values) {
+        json_decref(bucket->percentile_values);
+        bucket->percentile_values = NULL;
+    }
+}
+
+/* Helper: Remove bucket from list */
+static void remove_bucket_from_list(nql_agg_state_t* agg_state, nql_agg_bucket_t* bucket_to_remove) {
+    if (!agg_state || !bucket_to_remove) {
+        return;
+    }
+    
+    nql_agg_bucket_t** prev_ptr = &agg_state->buckets;
+    nql_agg_bucket_t* current = agg_state->buckets;
+    
+    while (current) {
+        if (current == bucket_to_remove) {
+            *prev_ptr = current->next;
+            free_bucket_resources(current);
+            free(current);
+            agg_state->bucket_count--;
+            return;
+        }
+        prev_ptr = &current->next;
+        current = current->next;
+    }
+}
+
+/* Window flush callback */
+static void window_flush_cb(uv_timer_t* handle) {
+    nql_agg_state_t* agg_state = (nql_agg_state_t*)handle->data;
+    if (!agg_state) {
+        return;
+    }
+    
     nblex_world* world = NULL;
     
     /* Find world from context */
@@ -360,55 +431,197 @@ static void window_flush_cb(uv_timer_t* handle) {
     }
     
     uint64_t now = nblex_timestamp_now();
-    uint64_t window_size_ns = agg->window.size_ms * 1000000ULL;
+    uint64_t window_size_ns = agg_state->window.size_ms * 1000000ULL;
 
-    /* Flush all buckets */
+    /* Process all buckets */
     nql_agg_bucket_t* bucket = agg_state->buckets;
+    nql_agg_bucket_t* next_bucket = NULL;
+    
     while (bucket) {
+        next_bucket = bucket->next; /* Save next before potential removal */
         bool should_flush = false;
+        bool should_remove = false;
 
-        if (agg->window.type == NQL_WINDOW_SESSION) {
+        if (agg_state->window.type == NQL_WINDOW_SESSION) {
             /* Session window: flush if timeout since last event */
-            uint64_t timeout_ns = agg->window.timeout_ms * 1000000ULL;
-            should_flush = (now - bucket->last_event_ns) >= timeout_ns && bucket->count > 0;
-        } else {
-            /* Tumbling/sliding window: flush if window end reached */
-            should_flush = bucket->window_end_ns <= now;
+            uint64_t timeout_ns = agg_state->window.timeout_ms * 1000000ULL;
+            if (bucket->count > 0 && (now - bucket->last_event_ns) >= timeout_ns) {
+                should_flush = true;
+                should_remove = true; /* Remove after flush */
+            }
+        } else if (agg_state->window.type == NQL_WINDOW_TUMBLING) {
+            /* Tumbling window: flush if window end reached, then reset for next window */
+            if (bucket->window_end_ns <= now) {
+                if (bucket->count > 0) {
+                    should_flush = true;
+                }
+                /* Reset for next window */
+                bucket->count = 0;
+                bucket->sum = 0.0;
+                bucket->min = INFINITY;
+                bucket->max = -INFINITY;
+                bucket->sum_squares = 0.0;
+                bucket->distinct_count = 0;
+                if (bucket->distinct_values) {
+                    json_decref(bucket->distinct_values);
+                    bucket->distinct_values = json_array();
+                }
+                if (bucket->percentile_values) {
+                    json_decref(bucket->percentile_values);
+                    bucket->percentile_values = json_array();
+                }
+                /* Calculate next window start */
+                uint64_t windows_passed = (now - bucket->window_start_ns) / window_size_ns;
+                bucket->window_start_ns = bucket->window_start_ns + (windows_passed * window_size_ns);
+                bucket->window_end_ns = bucket->window_start_ns + window_size_ns;
+            }
+        } else if (agg_state->window.type == NQL_WINDOW_SLIDING) {
+            /* Sliding window: flush if window end reached, then remove */
+            if (bucket->window_end_ns <= now) {
+                if (bucket->count > 0) {
+                    should_flush = true;
+                }
+                should_remove = true; /* Remove expired sliding window */
+            }
         }
 
         if (should_flush) {
-            nblex_event* result_event = create_agg_result_event(bucket, agg, world);
+            nblex_event* result_event = create_agg_result_event(bucket, agg_state, world);
             if (result_event) {
                 nblex_event_emit(world, result_event);
             }
-            
-            /* Reset bucket for next window */
-            bucket->count = 0;
-            bucket->sum = 0.0;
-            bucket->min = INFINITY;
-            bucket->max = -INFINITY;
-            bucket->sum_squares = 0.0;
-            bucket->distinct_count = 0;
-            if (bucket->distinct_values) {
-                json_decref(bucket->distinct_values);
-                bucket->distinct_values = NULL;
-            }
-            if (bucket->percentile_values) {
-                json_decref(bucket->percentile_values);
-                bucket->percentile_values = NULL;
-            }
-            bucket->window_start_ns = now;
-            bucket->window_end_ns = now + window_size_ns;
         }
-        bucket = bucket->next;
+        
+        if (should_remove) {
+            remove_bucket_from_list(agg_state, bucket);
+        }
+        
+        bucket = next_bucket;
     }
     
     agg_state->last_flush_ns = now;
 }
 
+/* Helper: Copy aggregation configuration from query to state */
+static int copy_agg_config(nql_agg_state_t* agg_state, nql_aggregate_t* agg) {
+    if (!agg_state || !agg) {
+        return -1;
+    }
+    
+    /* Copy window configuration */
+    agg_state->window = agg->window;
+    
+    /* Copy aggregation functions */
+    agg_state->funcs_count = agg->funcs_count;
+    if (agg->funcs_count > 0 && agg->funcs) {
+        agg_state->funcs = calloc(agg->funcs_count, sizeof(nql_agg_func_t));
+        if (!agg_state->funcs) {
+            return -1;
+        }
+        for (size_t i = 0; i < agg->funcs_count; i++) {
+            agg_state->funcs[i] = agg->funcs[i];
+            agg_state->funcs[i].field = NULL; /* Initialize to NULL */
+            /* Copy field string if present */
+            if (agg->funcs[i].field) {
+                agg_state->funcs[i].field = strdup(agg->funcs[i].field);
+                if (!agg_state->funcs[i].field) {
+                    /* Free already copied fields */
+                    for (size_t j = 0; j < i; j++) {
+                        free(agg_state->funcs[j].field);
+                    }
+                    free(agg_state->funcs);
+                    agg_state->funcs = NULL;
+                    return -1;
+                }
+            }
+        }
+    } else {
+        agg_state->funcs = NULL;
+        agg_state->funcs_count = 0;
+    }
+    
+    /* Copy group by fields */
+    agg_state->group_by_count = agg->group_by_count;
+    if (agg->group_by_count > 0 && agg->group_by_fields) {
+        agg_state->group_by_fields = calloc(agg->group_by_count, sizeof(char*));
+        if (!agg_state->group_by_fields) {
+            /* Free funcs */
+            if (agg_state->funcs) {
+                for (size_t i = 0; i < agg_state->funcs_count; i++) {
+                    free(agg_state->funcs[i].field);
+                }
+                free(agg_state->funcs);
+            }
+            return -1;
+        }
+        for (size_t i = 0; i < agg->group_by_count; i++) {
+            if (agg->group_by_fields[i]) {
+                agg_state->group_by_fields[i] = strdup(agg->group_by_fields[i]);
+            } else {
+                agg_state->group_by_fields[i] = NULL;
+            }
+            if (agg->group_by_fields[i] && !agg_state->group_by_fields[i]) {
+                /* strdup failed */
+                /* Free already copied fields */
+                for (size_t j = 0; j < i; j++) {
+                    free(agg_state->group_by_fields[j]);
+                }
+                free(agg_state->group_by_fields);
+                /* Free funcs */
+                if (agg_state->funcs) {
+                    for (size_t j = 0; j < agg_state->funcs_count; j++) {
+                        free(agg_state->funcs[j].field);
+                    }
+                    free(agg_state->funcs);
+                }
+                return -1;
+            }
+        }
+    } else {
+        agg_state->group_by_fields = NULL;
+        agg_state->group_by_count = 0;
+    }
+    
+    /* Note: where_filter is checked before getting state, so we don't need to store it */
+    
+    return 0;
+}
+
+/* Helper: Free aggregation state resources */
+static void free_agg_state_resources(nql_agg_state_t* agg_state) {
+    if (!agg_state) {
+        return;
+    }
+    
+    /* Free aggregation functions */
+    if (agg_state->funcs) {
+        for (size_t i = 0; i < agg_state->funcs_count; i++) {
+            free(agg_state->funcs[i].field);
+        }
+        free(agg_state->funcs);
+        agg_state->funcs = NULL;
+    }
+    
+    /* Free group by fields */
+    if (agg_state->group_by_fields) {
+        for (size_t i = 0; i < agg_state->group_by_count; i++) {
+            free(agg_state->group_by_fields[i]);
+        }
+        free(agg_state->group_by_fields);
+        agg_state->group_by_fields = NULL;
+    }
+    
+    /* Note: where_filter is not freed here - it's owned by the query */
+}
+
 /* Get or create aggregation state */
 static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, const char* query_str) {
     if (!query || query->type != NQL_QUERY_AGGREGATE || !world) {
+        return NULL;
+    }
+    
+    nql_aggregate_t* agg = query->data.aggregate;
+    if (!agg) {
         return NULL;
     }
     
@@ -418,22 +631,11 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
         while (ctx) {
             if (ctx->query_string && strcmp(ctx->query_string, query_str) == 0 &&
                 ctx->world == world && ctx->state.agg_state) {
-                /* Update query reference to point to the new query object */
-                ctx->state.agg_state->query = query;
-                ctx->query = query;
+                /* State already exists, return it */
                 return ctx->state.agg_state;
             }
             ctx = ctx->next;
         }
-    }
-    
-    /* Check existing contexts by query pointer */
-    nql_exec_ctx_t* ctx = exec_contexts;
-    while (ctx) {
-        if (ctx->query == query && ctx->world == world && ctx->state.agg_state) {
-            return ctx->state.agg_state;
-        }
-        ctx = ctx->next;
     }
     
     /* Create new context and state */
@@ -448,28 +650,34 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
         return NULL;
     }
     
-    agg_state->query = query;
     agg_state->buckets = NULL;
     agg_state->bucket_count = 0;
     agg_state->timer_active = false;
     
+    /* Copy aggregation configuration from query */
+    if (copy_agg_config(agg_state, agg) != 0) {
+        free(agg_state);
+        free(new_ctx);
+        return NULL;
+    }
+    
     /* Initialize window timer if needed */
-    nql_aggregate_t* agg = query->data.aggregate;
-    if (agg->window.type != NQL_WINDOW_NONE && world->loop) {
+    /* Only create timer if world loop is initialized AND started */
+    if (agg_state->window.type != NQL_WINDOW_NONE && world->loop && world->started) {
         agg_state->window_timer = calloc(1, sizeof(uv_timer_t));
         if (agg_state->window_timer) {
             uv_timer_init(world->loop, agg_state->window_timer);
             agg_state->window_timer->data = agg_state;
 
             uint64_t interval_ms;
-            if (agg->window.type == NQL_WINDOW_SESSION) {
+            if (agg_state->window.type == NQL_WINDOW_SESSION) {
                 /* Session window: check frequently for timeout */
-                interval_ms = agg->window.timeout_ms / 2;
+                interval_ms = agg_state->window.timeout_ms / 2;
                 if (interval_ms < 100) interval_ms = 100;
             } else {
                 /* Tumbling/sliding window */
-                interval_ms = agg->window.slide_ms > 0 ?
-                              agg->window.slide_ms : agg->window.size_ms;
+                interval_ms = agg_state->window.slide_ms > 0 ?
+                              agg_state->window.slide_ms : agg_state->window.size_ms;
             }
 
             uv_timer_start(agg_state->window_timer, window_flush_cb,
@@ -479,7 +687,7 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
     }
     
     new_ctx->world = world;
-    new_ctx->query = query;
+    new_ctx->query = query;  /* Store for reference, but state doesn't depend on it */
     new_ctx->query_string = query_str ? strdup(query_str) : NULL;
     new_ctx->state.agg_state = agg_state;
     new_ctx->next = exec_contexts;
@@ -488,30 +696,30 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
     return agg_state;
 }
 
-/* Get or create bucket for group keys */
-static nql_agg_bucket_t* get_agg_bucket(nql_agg_state_t* agg_state,
-                                        char** group_keys,
-                                        size_t group_keys_count) {
-    if (!agg_state) {
-        free_group_keys(group_keys, group_keys_count);
-        return NULL;
-    }
-    
-    /* Search existing buckets */
+/* Helper: Find bucket by group keys and window start */
+static nql_agg_bucket_t* find_bucket_by_window(nql_agg_state_t* agg_state,
+                                               char** group_keys,
+                                               size_t group_keys_count,
+                                               uint64_t window_start_ns) {
     nql_agg_bucket_t* bucket = agg_state->buckets;
     while (bucket) {
-        if (compare_group_keys(bucket->group_keys, group_keys, group_keys_count) == 0) {
-            /* Found existing bucket, free the new keys */
-            free_group_keys(group_keys, group_keys_count);
+        if (compare_group_keys(bucket->group_keys, group_keys, group_keys_count) == 0 &&
+            bucket->window_start_ns == window_start_ns) {
             return bucket;
         }
         bucket = bucket->next;
     }
-    
-    /* Create new bucket */
-    bucket = calloc(1, sizeof(nql_agg_bucket_t));
+    return NULL;
+}
+
+/* Helper: Create a new bucket with specified window */
+static nql_agg_bucket_t* create_bucket_with_window(nql_agg_state_t* agg_state,
+                                                    char** group_keys,
+                                                    size_t group_keys_count,
+                                                    uint64_t window_start_ns,
+                                                    uint64_t window_end_ns) {
+    nql_agg_bucket_t* bucket = calloc(1, sizeof(nql_agg_bucket_t));
     if (!bucket) {
-        free_group_keys(group_keys, group_keys_count);
         return NULL;
     }
     
@@ -525,31 +733,307 @@ static nql_agg_bucket_t* get_agg_bucket(nql_agg_state_t* agg_state,
     bucket->distinct_count = 0;
     bucket->distinct_values = json_array();
     bucket->percentile_values = json_array();
-    
-    uint64_t now = nblex_timestamp_now();
-    nql_aggregate_t* agg = agg_state->query->data.aggregate;
-    if (agg->window.type == NQL_WINDOW_SESSION) {
-        /* Session window: start now, no fixed end */
-        bucket->window_start_ns = now;
-        bucket->window_end_ns = UINT64_MAX;
-        bucket->last_event_ns = now;
-    } else if (agg->window.type != NQL_WINDOW_NONE) {
-        uint64_t window_size_ns = agg->window.size_ms * 1000000ULL;
-        bucket->window_start_ns = now;
-        bucket->window_end_ns = now + window_size_ns;
-        bucket->last_event_ns = now;
-    } else {
-        /* No window - set to max value to never expire */
-        bucket->window_start_ns = now;
-        bucket->window_end_ns = UINT64_MAX;
-        bucket->last_event_ns = now;
-    }
+    bucket->window_start_ns = window_start_ns;
+    bucket->window_end_ns = window_end_ns;
+    bucket->last_event_ns = window_start_ns;
     
     bucket->next = agg_state->buckets;
     agg_state->buckets = bucket;
     agg_state->bucket_count++;
     
     return bucket;
+}
+
+/* Get or create bucket(s) for group keys and event timestamp */
+static int get_or_create_buckets_for_event(nql_agg_state_t* agg_state,
+                                           char** group_keys,
+                                           size_t group_keys_count,
+                                           uint64_t event_timestamp_ns,
+                                           nql_agg_bucket_t*** buckets_out,
+                                           size_t* buckets_count_out) {
+    if (!agg_state || !buckets_out || !buckets_count_out) {
+        if (group_keys) {
+            free_group_keys(group_keys, group_keys_count);
+        }
+        return -1;
+    }
+    
+    *buckets_count_out = 0;
+    *buckets_out = NULL;
+    
+    if (agg_state->window.type == NQL_WINDOW_NONE) {
+        /* No windowing: one bucket per group key (or single bucket if no group by) */
+        /* Search for existing bucket by group keys only (ignore window) */
+        nql_agg_bucket_t* bucket = agg_state->buckets;
+        while (bucket) {
+            if (compare_group_keys(bucket->group_keys, group_keys, group_keys_count) == 0 &&
+                bucket->window_start_ns == 0 && bucket->window_end_ns == UINT64_MAX) {
+                /* Found existing no-window bucket */
+                if (group_keys) {
+                    free_group_keys(group_keys, group_keys_count);
+                }
+                *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
+                if (!*buckets_out) {
+                    return -1;
+                }
+                (*buckets_out)[0] = bucket;
+                *buckets_count_out = 1;
+                return 0;
+            }
+            bucket = bucket->next;
+        }
+        
+        /* Create bucket with no window */
+        bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count, 0, UINT64_MAX);
+        if (!bucket) {
+            if (group_keys) {
+                free_group_keys(group_keys, group_keys_count);
+            }
+            return -1;
+        }
+        
+        *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
+        if (!*buckets_out) {
+            return -1;
+        }
+        (*buckets_out)[0] = bucket;
+        *buckets_count_out = 1;
+        return 0;
+    }
+    
+    if (agg_state->window.type == NQL_WINDOW_SESSION) {
+        /* Session window: find or create bucket for this group */
+        nql_agg_bucket_t* bucket = NULL;
+        nql_agg_bucket_t* iter = agg_state->buckets;
+        uint64_t timeout_ns = agg_state->window.timeout_ms * 1000000ULL;
+        
+        /* Find existing session bucket for this group */
+        while (iter) {
+            if (compare_group_keys(iter->group_keys, group_keys, group_keys_count) == 0 &&
+                iter->window_end_ns == UINT64_MAX) { /* Session windows have UINT64_MAX as end */
+                /* Check if event is within session timeout */
+                if (event_timestamp_ns >= iter->last_event_ns &&
+                    (event_timestamp_ns - iter->last_event_ns) < timeout_ns) {
+                    bucket = iter;
+                    break;
+                }
+            }
+            iter = iter->next;
+        }
+        
+        if (!bucket) {
+            /* Create new session window */
+            bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count,
+                                             event_timestamp_ns, UINT64_MAX);
+            if (!bucket) {
+                if (group_keys) {
+                    free_group_keys(group_keys, group_keys_count);
+                }
+                return -1;
+            }
+        } else {
+            if (group_keys) {
+                free_group_keys(group_keys, group_keys_count);
+            }
+        }
+        
+        *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
+        if (!*buckets_out) {
+            return -1;
+        }
+        (*buckets_out)[0] = bucket;
+        *buckets_count_out = 1;
+        return 0;
+    }
+    
+    /* Tumbling or sliding window */
+    uint64_t window_size_ns = agg_state->window.size_ms * 1000000ULL;
+    uint64_t slide_ns = agg_state->window.slide_ms > 0 ? agg_state->window.slide_ms * 1000000ULL : window_size_ns;
+    
+    if (agg_state->window.type == NQL_WINDOW_TUMBLING) {
+        /* Tumbling: event belongs to one window, aligned to window boundaries */
+        uint64_t window_start = (event_timestamp_ns / window_size_ns) * window_size_ns;
+        nql_agg_bucket_t* bucket = find_bucket_by_window(agg_state, group_keys, group_keys_count, window_start);
+        if (!bucket) {
+            bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count,
+                                             window_start, window_start + window_size_ns);
+            if (!bucket) {
+                if (group_keys) {
+                    free_group_keys(group_keys, group_keys_count);
+                }
+                return -1;
+            }
+        } else {
+            if (group_keys) {
+                free_group_keys(group_keys, group_keys_count);
+            }
+        }
+        
+        *buckets_out = calloc(1, sizeof(nql_agg_bucket_t*));
+        if (!*buckets_out) {
+            return -1;
+        }
+        (*buckets_out)[0] = bucket;
+        *buckets_count_out = 1;
+        return 0;
+    }
+    
+    /* Sliding window: event may belong to multiple windows */
+    /* Find all windows that contain this event */
+    /* Windows are aligned to slide boundaries */
+    uint64_t window_start = ((event_timestamp_ns / slide_ns) * slide_ns);
+    
+    /* Calculate how many windows can contain this event */
+    /* A window contains an event if: window_start <= event_ts < window_start + window_size */
+    /* So we need windows where: window_start <= event_ts AND window_start + window_size > event_ts */
+    /* Which means: window_start > event_ts - window_size AND window_start <= event_ts */
+    uint64_t earliest_window_start = (event_timestamp_ns >= window_size_ns) ?
+                                     (event_timestamp_ns - window_size_ns) : 0;
+    earliest_window_start = ((earliest_window_start / slide_ns) * slide_ns);
+    
+    size_t max_windows = ((window_start - earliest_window_start) / slide_ns) + 1;
+    if (max_windows > 1000) {
+        max_windows = 1000; /* Safety limit */
+    }
+    
+    nql_agg_bucket_t** buckets = calloc(max_windows, sizeof(nql_agg_bucket_t*));
+    if (!buckets) {
+        if (group_keys) {
+            free_group_keys(group_keys, group_keys_count);
+        }
+        return -1;
+    }
+    
+    size_t count = 0;
+    uint64_t current_window_start = earliest_window_start;
+    bool keys_owned_by_bucket = false;
+    
+    while (current_window_start <= event_timestamp_ns &&
+           current_window_start + window_size_ns > event_timestamp_ns &&
+           count < max_windows) {
+        nql_agg_bucket_t* bucket = find_bucket_by_window(agg_state, group_keys, group_keys_count, current_window_start);
+        if (!bucket) {
+            bucket = create_bucket_with_window(agg_state, group_keys, group_keys_count,
+                                             current_window_start, current_window_start + window_size_ns);
+            if (!bucket) {
+                free(buckets);
+                if (!keys_owned_by_bucket && group_keys) {
+                    free_group_keys(group_keys, group_keys_count);
+                }
+                return -1;
+            }
+            keys_owned_by_bucket = true; /* Keys now owned by bucket */
+        }
+        buckets[count++] = bucket;
+        
+        current_window_start += slide_ns;
+    }
+    
+    /* Free group keys if they weren't used by any bucket */
+    if (!keys_owned_by_bucket && count > 0) {
+        /* Check if any bucket owns these keys */
+        for (size_t i = 0; i < count; i++) {
+            if (buckets[i]->group_keys == group_keys) {
+                keys_owned_by_bucket = true;
+                break;
+            }
+        }
+    }
+    
+    if (!keys_owned_by_bucket && group_keys) {
+        free_group_keys(group_keys, group_keys_count);
+    }
+    
+    *buckets_out = buckets;
+    *buckets_count_out = count;
+    return 0;
+}
+
+/* Helper: Update bucket with event data */
+static void update_bucket_with_event(nql_agg_bucket_t* bucket, nblex_event* event, nql_agg_state_t* agg_state) {
+    if (!bucket || !event || !agg_state) {
+        return;
+    }
+    
+    bucket->count++;
+    
+    /* Update last event time for session windows */
+    if (agg_state->window.type == NQL_WINDOW_SESSION) {
+        uint64_t event_ts = event->timestamp_ns ? event->timestamp_ns : nblex_timestamp_now();
+        if (event_ts > bucket->last_event_ns) {
+            bucket->last_event_ns = event_ts;
+        }
+    }
+    
+    if (agg_state->funcs && agg_state->funcs_count > 0) {
+        for (size_t i = 0; i < agg_state->funcs_count; i++) {
+            nql_agg_func_t* func = &agg_state->funcs[i];
+            
+            if (func->type == NQL_AGG_COUNT) {
+                /* Already counted */
+                continue;
+            }
+            
+            if (!func->field) {
+                continue;
+            }
+            
+            double value = get_numeric_value(event->data, func->field);
+            
+            switch (func->type) {
+                case NQL_AGG_SUM:
+                case NQL_AGG_AVG:
+                    bucket->sum += value;
+                    bucket->sum_squares += value * value;
+                    if (value < bucket->min) bucket->min = value;
+                    if (value > bucket->max) bucket->max = value;
+                    break;
+                    
+                case NQL_AGG_MIN:
+                    if (value < bucket->min) bucket->min = value;
+                    break;
+                    
+                case NQL_AGG_MAX:
+                    if (value > bucket->max) bucket->max = value;
+                    break;
+                    
+                case NQL_AGG_PERCENTILE:
+                    if (bucket->percentile_values) {
+                        json_array_append_new(bucket->percentile_values, json_real(value));
+                    }
+                    break;
+                    
+                case NQL_AGG_DISTINCT:
+                    /* Simple distinct tracking */
+                    if (bucket->distinct_values) {
+                        json_t* val = json_real(value);
+                        bool found = false;
+                        size_t size = json_array_size(bucket->distinct_values);
+                        for (size_t j = 0; j < size; j++) {
+                            json_t* existing = json_array_get(bucket->distinct_values, j);
+                            if (json_is_number(existing) &&
+                                fabs(json_number_value(existing) - value) < 1e-9) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            json_array_append(bucket->distinct_values, val);
+                            bucket->distinct_count++;
+                        }
+                        json_decref(val);
+                    }
+                    break;
+                    
+                case NQL_AGG_COUNT:
+                    /* COUNT is handled by bucket->count increment above */
+                    break;
+                    
+                default:
+                    break;
+            }
+        }
+    }
 }
 
 /* Execute aggregate query */
@@ -575,97 +1059,34 @@ static int execute_aggregate(nql_query_t* query, nblex_event* event, nblex_world
     
     /* Extract group keys */
     size_t group_keys_count = 0;
-    char** group_keys = extract_group_keys(agg, event, &group_keys_count);
+    char** group_keys = extract_group_keys(agg_state, event, &group_keys_count);
     
-    /* Get or create bucket */
-    nql_agg_bucket_t* bucket = get_agg_bucket(agg_state, group_keys, group_keys_count);
-    if (!bucket) {
-        free_group_keys(group_keys, group_keys_count);
+    /* Get event timestamp */
+    uint64_t event_timestamp_ns = event->timestamp_ns ? event->timestamp_ns : nblex_timestamp_now();
+    
+    /* Get or create buckets for this event */
+    nql_agg_bucket_t** buckets = NULL;
+    size_t buckets_count = 0;
+    if (get_or_create_buckets_for_event(agg_state, group_keys, group_keys_count,
+                                        event_timestamp_ns, &buckets, &buckets_count) != 0) {
         return 0;
     }
     
-    /* Update aggregations */
-    bucket->count++;
-
-    /* Update last event time for session windows */
-    if (agg->window.type == NQL_WINDOW_SESSION) {
-        bucket->last_event_ns = event->timestamp_ns ? event->timestamp_ns : nblex_timestamp_now();
-    }
-
-    for (size_t i = 0; i < agg->funcs_count; i++) {
-        nql_agg_func_t* func = &agg->funcs[i];
-        
-        if (func->type == NQL_AGG_COUNT) {
-            /* Already counted */
-            continue;
-        }
-        
-        if (!func->field) {
-            continue;
-        }
-        
-        double value = get_numeric_value(event->data, func->field);
-        
-        switch (func->type) {
-            case NQL_AGG_SUM:
-            case NQL_AGG_AVG:
-                bucket->sum += value;
-                bucket->sum_squares += value * value;
-                if (value < bucket->min) bucket->min = value;
-                if (value > bucket->max) bucket->max = value;
-                break;
-                
-            case NQL_AGG_MIN:
-                if (value < bucket->min) bucket->min = value;
-                break;
-                
-            case NQL_AGG_MAX:
-                if (value > bucket->max) bucket->max = value;
-                break;
-                
-            case NQL_AGG_PERCENTILE:
-                if (bucket->percentile_values) {
-                    json_array_append_new(bucket->percentile_values, json_real(value));
-                }
-                break;
-                
-            case NQL_AGG_DISTINCT:
-                /* Simple distinct tracking */
-                if (bucket->distinct_values) {
-                    json_t* val = json_real(value);
-                    bool found = false;
-                    size_t size = json_array_size(bucket->distinct_values);
-                    for (size_t j = 0; j < size; j++) {
-                        json_t* existing = json_array_get(bucket->distinct_values, j);
-                        if (json_is_number(existing) &&
-                            fabs(json_number_value(existing) - value) < 1e-9) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        json_array_append(bucket->distinct_values, val);
-                        bucket->distinct_count++;
-                    }
-                    json_decref(val);
-                }
-                break;
-                
-            case NQL_AGG_COUNT:
-                /* COUNT is handled by bucket->count increment above */
-                break;
-                
-            default:
-                break;
-        }
+    /* Update all buckets with event data */
+    for (size_t i = 0; i < buckets_count; i++) {
+        update_bucket_with_event(buckets[i], event, agg_state);
     }
     
     /* For non-windowed queries, emit immediately */
-    if (agg->window.type == NQL_WINDOW_NONE) {
-        nblex_event* result_event = create_agg_result_event(bucket, agg, world);
-        if (result_event) {
-            nblex_event_emit(world, result_event);
-        }
+    nblex_event* result_event = NULL;
+    if (agg_state->window.type == NQL_WINDOW_NONE && buckets_count > 0) {
+        result_event = create_agg_result_event(buckets[0], agg_state, world);
+    }
+    
+    free(buckets);
+    
+    if (result_event) {
+        nblex_event_emit(world, result_event);
     }
     
     return 1;
