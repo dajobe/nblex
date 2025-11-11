@@ -75,12 +75,12 @@ When complete, nblex will:
 - Additional output types (file, HTTP, metrics) - implemented
 - Configuration file support (YAML) - basic implementation
 - Unit tests (>70% coverage for core parsers)
+- Integration tests - modular test suite with file, correlation, config, and output tests
 - Documentation site - basic HTML site created
 - Filter engine with real-time evaluation
 
 **🚧 In Progress:**
 
-- Integration tests
 - CLI tool fixes (naming conflicts)
 - Advanced correlation patterns
 
