@@ -49,6 +49,16 @@ target_link_libraries(test_file_input nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} 
 add_executable(test_metrics_output test_metrics_output.c)
 target_link_libraries(test_metrics_output nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
+# High priority unit tests
+add_executable(test_world test_world.c test_helpers.c)
+target_link_libraries(test_world nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
+add_executable(test_correlation test_correlation.c test_helpers.c)
+target_link_libraries(test_correlation nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
+add_executable(test_config test_config.c)
+target_link_libraries(test_config nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
 # Register tests
 add_test(NAME parsers COMMAND test_parsers)
 add_test(NAME filters COMMAND test_filters)
@@ -58,5 +68,8 @@ add_test(NAME nql_windows COMMAND test_nql_windows)
 add_test(NAME nql_schema COMMAND test_nql_schema)
 add_test(NAME file_input COMMAND test_file_input)
 add_test(NAME metrics_output COMMAND test_metrics_output)
+add_test(NAME world COMMAND test_world)
+add_test(NAME correlation COMMAND test_correlation)
+add_test(NAME config COMMAND test_config)
 
 message(STATUS "Unit tests configured")
