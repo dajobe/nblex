@@ -344,8 +344,8 @@ nblex monitor \
 
 **Core Components:**
 
-- [ ] `nblex_world.c` - World lifecycle, event handling, start/stop/run
-- [ ] `config.c` - YAML configuration parsing and application
+- [x] `nblex_world.c` - World lifecycle, event handling, start/stop/run
+- [x] `config.c` - YAML configuration parsing and application
 - [ ] `nblex_event.c` - Event creation, emission, type checking (partial via integration)
 
 **Input Components:**
@@ -367,14 +367,14 @@ nblex monitor \
 
 **Correlation Components:**
 
-- [ ] `time_correlation.c` - Time-based correlation strategies, event matching
+- [x] `time_correlation.c` - Time-based correlation strategies, event matching
 
 **Utility Components:**
 
 - [ ] `buffer.c` - Buffer management functions
 - [ ] `memory.c` - Memory allocation wrappers
 
-**Estimated Overall Coverage:** ~35-40% code coverage, ~60% functional coverage
+**Estimated Overall Coverage:** ~45-50% code coverage, ~70% functional coverage
 
 #### Documentation
 
