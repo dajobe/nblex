@@ -15,6 +15,7 @@
 
 /* Forward declarations */
 static void cleanup_timer_cb(uv_timer_t* handle);
+static void cleanup_timer_close_cb(uv_handle_t* handle);
 static void correlation_check_event(nblex_correlation* corr, nblex_event* new_event);
 
 /*
@@ -97,10 +98,19 @@ void nblex_correlation_free(nblex_correlation* corr) {
 
   /* Stop and close timer only if it was initialized */
   if (corr->timer_initialized && corr->world && corr->world->loop) {
+    /* Stop timer if not already stopped (safe to call multiple times) */
     uv_timer_stop(&corr->cleanup_timer);
-    uv_close((uv_handle_t*)&corr->cleanup_timer, NULL);
+    /* Close the timer handle - the close callback will free the struct */
+    /* The caller (e.g., nblex_world_free) is responsible for running the event loop
+     * to process the close callback. We cannot run the loop here because the world
+     * may have other active handles, and we don't want to block or interfere. */
+    uv_close((uv_handle_t*)&corr->cleanup_timer, cleanup_timer_close_cb);
+    corr->timer_initialized = 0;
+    /* Don't free the struct here - the close callback will do it */
+    return;
   }
 
+  /* If timer wasn't initialized, free immediately */
   /* Free buffered log events */
   nblex_event_buffer_entry* entry = corr->log_events;
   while (entry) {
@@ -202,12 +212,12 @@ static nblex_event* create_correlation_event(nblex_correlation* corr,
   json_object_set_new(corr_data, "window_ms",
                       json_integer(corr->window_ns / 1000000ULL));
 
-  /* Add log event data */
+  /* Add log event data - json_object_set increments ref count */
   if (log_event->data) {
     json_object_set(corr_data, "log", log_event->data);
   }
 
-  /* Add network event data */
+  /* Add network event data - json_object_set increments ref count */
   if (network_event->data) {
     json_object_set(corr_data, "network", network_event->data);
   }
@@ -263,13 +273,15 @@ static void correlation_check_event(nblex_correlation* corr, nblex_event* new_ev
 
       if (corr_event) {
         corr->correlations_found++;
-        corr->world->events_correlated++;
+        if (corr->world) {
+          corr->world->events_correlated++;
 
-        /* Emit correlation event */
-        nblex_event_emit(corr->world, corr_event);
-
-        /* Free correlation event */
-        nblex_event_free(corr_event);
+          /* Emit correlation event - this will free it */
+          nblex_event_emit(corr->world, corr_event);
+        } else {
+          /* World is NULL, free the event ourselves */
+          nblex_event_free(corr_event);
+        }
       }
     }
 
@@ -294,6 +306,39 @@ void nblex_correlation_process_event(nblex_correlation* corr, nblex_event* event
   } else if (event->type == NBLEX_EVENT_NETWORK) {
     add_to_buffer(&corr->network_events, &corr->network_events_count, event);
   }
+}
+
+/*
+ * Timer close callback - called when timer handle is fully closed
+ * This callback frees the correlation struct after the timer is closed
+ */
+static void cleanup_timer_close_cb(uv_handle_t* handle) {
+  /* The handle's data pointer points to the correlation struct */
+  nblex_correlation* corr = (nblex_correlation*)handle->data;
+  if (!corr) {
+    return;
+  }
+
+  /* Free buffered log events */
+  nblex_event_buffer_entry* entry = corr->log_events;
+  while (entry) {
+    nblex_event_buffer_entry* next = entry->next;
+    nblex_event_free(entry->event);
+    nblex_free(entry);
+    entry = next;
+  }
+
+  /* Free buffered network events */
+  entry = corr->network_events;
+  while (entry) {
+    nblex_event_buffer_entry* next = entry->next;
+    nblex_event_free(entry->event);
+    nblex_free(entry);
+    entry = next;
+  }
+
+  /* Now safe to free the correlation struct */
+  nblex_free(corr);
 }
 
 /*

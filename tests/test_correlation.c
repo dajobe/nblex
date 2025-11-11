@@ -86,7 +86,15 @@ START_TEST(test_correlation_start) {
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(corr->timer_initialized, 1);
   
+  /* Stop timer before freeing */
+  uv_timer_stop(&corr->cleanup_timer);
+  /* Let nblex_correlation_free handle closing the timer */
   nblex_correlation_free(corr);
+  /* Run event loop to process timer close callback */
+  for (int i = 0; i < 10 && uv_loop_alive(world->loop); i++) {
+    uv_run(world->loop, UV_RUN_ONCE);
+  }
+  /* nblex_world_free will handle world's correlation and event loop cleanup */
   nblex_world_free(world);
 }
 END_TEST
@@ -122,7 +130,11 @@ START_TEST(test_correlation_free_cleanup) {
   nblex_correlation* corr = nblex_correlation_new(world);
   nblex_correlation_start(corr);
   
+  /* Stop timer before freeing */
+  uv_timer_stop(&corr->cleanup_timer);
+  /* Let nblex_correlation_free handle closing the timer */
   nblex_correlation_free(corr);
+  /* world_free will handle cleanup including running event loop for correlation timer */
   nblex_world_free(world);
   /* If we get here without crashing, cleanup worked */
 }
@@ -226,7 +238,11 @@ START_TEST(test_correlation_time_based_match) {
   
   nblex_event_free(log_event);
   nblex_event_free(net_event);
+  /* Free correlation (timer not started, so safe to free directly) */
   nblex_correlation_free(corr);
+  /* Stop world to ensure clean shutdown before freeing */
+  nblex_world_stop(world);
+  /* world_free will handle cleanup including running event loop for correlation timer */
   nblex_world_free(world);
   test_reset_captured_events();
 }
@@ -266,7 +282,11 @@ START_TEST(test_correlation_time_based_no_match_outside_window) {
   
   nblex_event_free(log_event);
   nblex_event_free(net_event);
+  /* Free correlation (no timer was started, so safe to free directly) */
   nblex_correlation_free(corr);
+  /* Stop world to ensure clean shutdown before freeing */
+  nblex_world_stop(world);
+  /* Let world_free handle cleanup of world's correlation and event loop */
   nblex_world_free(world);
   test_reset_captured_events();
 }
@@ -306,7 +326,11 @@ START_TEST(test_correlation_bidirectional_matching) {
   
   nblex_event_free(log_event);
   nblex_event_free(net_event);
+  /* Free correlation (timer not started, so safe to free directly) */
   nblex_correlation_free(corr);
+  /* Stop world to ensure clean shutdown before freeing */
+  nblex_world_stop(world);
+  /* world_free will handle cleanup including running event loop for correlation timer */
   nblex_world_free(world);
   test_reset_captured_events();
 }

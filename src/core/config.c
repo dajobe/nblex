@@ -149,13 +149,18 @@ nblex_config_t* nblex_config_load_yaml(const char* filename) {
                     current_output = &config->outputs[config->outputs_count++];
                     memset(current_output, 0, sizeof(nblex_output_config_t));
                 }
+                /* Reset expecting_key when entering a mapping */
+                expecting_key = 1;
                 break;
 
             case YAML_MAPPING_END_EVENT:
                 if (in_logs) in_logs = 0;
                 if (in_network) in_network = 0;
+                if (in_correlation) in_correlation = 0;
+                if (in_performance) in_performance = 0;
                 current_input = NULL;
                 current_output = NULL;
+                expecting_key = 1;  /* Reset to expect next key */
                 break;
 
             case YAML_SEQUENCE_START_EVENT:
@@ -271,8 +276,15 @@ nblex_config_t* nblex_config_load_yaml(const char* filename) {
                 break;
         }
 
+        /* Check event type before deleting */
+        yaml_event_type_t event_type = event.type;
         yaml_event_delete(&event);
-    } while (event.type != YAML_STREAM_END_EVENT);
+        
+        /* Break if we've reached the end of the stream */
+        if (event_type == YAML_STREAM_END_EVENT) {
+            break;
+        }
+    } while (1);
 
     yaml_parser_delete(&parser);
     fclose(file);

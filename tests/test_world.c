@@ -110,6 +110,8 @@ START_TEST(test_world_start) {
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(world->started, true);
   
+  /* Stop before freeing - world_free will handle cleanup */
+  nblex_world_stop(world);
   nblex_world_free(world);
 }
 END_TEST
@@ -142,6 +144,8 @@ START_TEST(test_world_start_already_started) {
   int rc = nblex_world_start(world);
   ck_assert_int_eq(rc, -1);
   
+  /* Stop before freeing - world_free will handle cleanup */
+  nblex_world_stop(world);
   nblex_world_free(world);
 }
 END_TEST
@@ -158,6 +162,7 @@ START_TEST(test_world_stop) {
   ck_assert_int_eq(world->started, false);
   ck_assert_int_eq(world->running, false);
   
+  /* world_free will handle cleanup including running event loop for correlation timer */
   nblex_world_free(world);
 }
 END_TEST
@@ -291,7 +296,9 @@ START_TEST(test_world_event_emission) {
   ck_assert_ptr_ne(test_captured_event, NULL);
   ck_assert_int_eq(test_captured_event->type, NBLEX_EVENT_LOG);
   
-  nblex_event_free(event);
+  /* Note: nblex_event_emit frees the event, so we don't free it here */
+  /* Stop before freeing - world_free will handle cleanup */
+  nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
 }

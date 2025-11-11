@@ -89,8 +89,11 @@ void nblex_world_free(nblex_world* world) {
   }
 
   /* Free correlation engine (this closes its timer handle) */
+  /* The close callback will free the correlation struct, and the uv_loop_close
+   * loop below will process the close callback */
   if (world->correlation) {
     nblex_correlation_free(world->correlation);
+    world->correlation = NULL;  /* Clear pointer after freeing */
   }
 
   /* Ask the executor module to shutdown exec-context timers that reference

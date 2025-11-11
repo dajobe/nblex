@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <errno.h>
 #include "../src/nblex_internal.h"
 
 /* Test suite declaration */
@@ -39,7 +40,17 @@ static char* create_temp_yaml(const char* content) {
   }
   
   if (content) {
-    write(fd, content, strlen(content));
+    ssize_t written = write(fd, content, strlen(content));
+    if (written < 0 || (size_t)written != strlen(content)) {
+      close(fd);
+      unlink(template);
+      return NULL;
+    }
+    /* Ensure file ends with newline for proper YAML parsing */
+    if (content[strlen(content) - 1] != '\n') {
+      write(fd, "\n", 1);
+    }
+    fsync(fd);  /* Ensure data is written to disk */
   }
   close(fd);
   
@@ -336,6 +347,8 @@ START_TEST(test_config_apply) {
   ck_assert_int_ge(world->inputs_count, 0);
   
   nblex_config_free(config);
+  /* Stop world to ensure clean shutdown - world_free will handle cleanup */
+  nblex_world_stop(world);
   nblex_world_free(world);
   unlink(path);
   free(path);
