@@ -364,7 +364,7 @@ nblex monitor \
 
 **Missing Integration Tests:**
 
-- [ ] **File Input Integration** (`test_integration_file.c`)
+- [ ] **File Input Integration** (`test_integration_file.c` - not yet implemented)
   - File tailing with libuv fs_event (once cleanup is stabilized)
   - File input → JSON parsing → filter pipeline
   - Multiple log formats (JSON, logfmt, syslog) end-to-end
