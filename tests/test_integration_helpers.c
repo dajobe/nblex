@@ -6,6 +6,22 @@
  * Licensed under the Apache License, Version 2.0
  */
 
+/* Feature test macros must be defined before any system headers */
+#ifndef __APPLE__
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 500
+#endif
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+#endif
+
 #include "test_integration_helpers.h"
 #include <stdlib.h>
 #include <string.h>
