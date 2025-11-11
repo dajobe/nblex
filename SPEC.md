@@ -340,6 +340,42 @@ nblex monitor \
 - [x] Shared test helpers for event creation and capture
 - [ ] Integration tests
 
+**Test Coverage Gaps (as of 2025-11-10):**
+
+**Core Components:**
+
+- [ ] `nblex_world.c` - World lifecycle, event handling, start/stop/run
+- [ ] `config.c` - YAML configuration parsing and application
+- [ ] `nblex_event.c` - Event creation, emission, type checking (partial via integration)
+
+**Input Components:**
+
+- [ ] `pcap_input.c` - Live packet capture (only mock tests exist)
+- [ ] `input_base.c` - Input management functions (format detection tested)
+
+**Parser Components:**
+
+- [ ] `dns_parser.c` - DNS query/response parsing
+- [ ] `http_parser.c` - HTTP/1.1 request/response parsing
+- [ ] `regex_parser.c` - Custom regex pattern parsing
+
+**Output Components:**
+
+- [ ] `file_output.c` - File writing, rotation management
+- [ ] `http_output.c` - HTTP webhook output, method/timeout configuration
+- [ ] `json_output.c` - JSON serialization and output
+
+**Correlation Components:**
+
+- [ ] `time_correlation.c` - Time-based correlation strategies, event matching
+
+**Utility Components:**
+
+- [ ] `buffer.c` - Buffer management functions
+- [ ] `memory.c` - Memory allocation wrappers
+
+**Estimated Overall Coverage:** ~35-40% code coverage, ~60% functional coverage
+
 #### Documentation
 
 - [x] Derived event payload schema documentation (`docs/derived-event-schema.md`)
@@ -403,6 +439,10 @@ nblex exports correlated events to external alerting systems via webhooks and HT
 
 - [ ] Integration tests
 - [ ] Benchmark suite
+- [ ] Unit tests for core components (world, config, correlation engine)
+- [ ] Unit tests for output formatters (file, HTTP, JSON)
+- [ ] Unit tests for network parsers (DNS, HTTP)
+- [ ] Unit tests for pcap input (live capture tests)
 - [ ] Extended test coverage for aggregates, correlations, and advanced pipelines
 
 #### Deployment & Distribution
