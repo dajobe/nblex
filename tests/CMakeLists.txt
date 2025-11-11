@@ -60,6 +60,9 @@ add_executable(test_config test_config.c)
 target_link_libraries(test_config nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
 # Integration tests - split into logical modules
+add_executable(test_integration_file test_integration_file.c test_helpers.c test_integration_helpers.c)
+target_link_libraries(test_integration_file nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
 add_executable(test_integration_correlation test_integration_correlation.c test_helpers.c)
 target_link_libraries(test_integration_correlation nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
@@ -81,6 +84,7 @@ add_test(NAME metrics_output COMMAND test_metrics_output)
 add_test(NAME world COMMAND test_world)
 add_test(NAME correlation COMMAND test_correlation)
 add_test(NAME config COMMAND test_config)
+add_test(NAME integration_file COMMAND test_integration_file)
 add_test(NAME integration_correlation COMMAND test_integration_correlation)
 add_test(NAME integration_config COMMAND test_integration_config)
 add_test(NAME integration_output COMMAND test_integration_output)

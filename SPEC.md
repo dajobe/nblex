@@ -342,7 +342,7 @@ nblex monitor \
 
 **Integration Test Coverage (as of 2025-11-10):**
 
-**Implemented Integration Tests:**
+**Implemented Integration Tests (4 modules):**
 
 - [x] **Correlation Integration** (`test_integration_correlation.c`)
   - Time window correlation (log + network events within window)
@@ -362,13 +362,13 @@ nblex monitor \
   - Event handler pipeline (event capture and processing)
   - Multiple events handling
 
-**Missing Integration Tests:**
-
-- [ ] **File Input Integration** (`test_integration_file.c` - not yet implemented)
-  - File tailing with libuv fs_event (once cleanup is stabilized)
+- [x] **File Input Integration** (`test_integration_file.c`)
   - File input → JSON parsing → filter pipeline
-  - Multiple log formats (JSON, logfmt, syslog) end-to-end
+  - Multiple log formats (JSON, logfmt, syslog, nginx) end-to-end
   - File rotation detection and handling
+  - File tailing with libuv fs_event (manual processing tested; libuv fs_event integration pending cleanup stabilization)
+
+**Missing Integration Tests:**
 
 - [ ] **End-to-End Flows**
   - File input + network input simultaneously
