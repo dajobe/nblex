@@ -694,28 +694,30 @@ static nql_agg_state_t* get_agg_state(nql_query_t* query, nblex_world* world, co
         return NULL;
     }
     
-    /* Initialize window timer if needed */
-    /* Only create timer if world loop is initialized AND started */
+    /* Initialize window timer if needed (will be done lazily if world not started yet) */
     if (agg_state->window.type != NQL_WINDOW_NONE && world->loop && world->started) {
-        agg_state->window_timer = calloc(1, sizeof(uv_timer_t));
-        if (agg_state->window_timer) {
-            uv_timer_init(world->loop, agg_state->window_timer);
-            agg_state->window_timer->data = agg_state;
+        /* Initialize timer immediately if world is already started */
+        if (!agg_state->window_timer) {
+            agg_state->window_timer = calloc(1, sizeof(uv_timer_t));
+            if (agg_state->window_timer) {
+                uv_timer_init(world->loop, agg_state->window_timer);
+                agg_state->window_timer->data = agg_state;
 
-            uint64_t interval_ms;
-            if (agg_state->window.type == NQL_WINDOW_SESSION) {
-                /* Session window: check frequently for timeout */
-                interval_ms = agg_state->window.timeout_ms / 2;
-                if (interval_ms < 100) interval_ms = 100;
-            } else {
-                /* Tumbling/sliding window */
-                interval_ms = agg_state->window.slide_ms > 0 ?
-                              agg_state->window.slide_ms : agg_state->window.size_ms;
+                uint64_t interval_ms;
+                if (agg_state->window.type == NQL_WINDOW_SESSION) {
+                    /* Session window: check frequently for timeout */
+                    interval_ms = agg_state->window.timeout_ms / 2;
+                    if (interval_ms < 100) interval_ms = 100;
+                } else {
+                    /* Tumbling/sliding window */
+                    interval_ms = agg_state->window.slide_ms > 0 ?
+                                  agg_state->window.slide_ms : agg_state->window.size_ms;
+                }
+
+                uv_timer_start(agg_state->window_timer, window_flush_cb,
+                              interval_ms, interval_ms);
+                agg_state->timer_active = true;
             }
-
-            uv_timer_start(agg_state->window_timer, window_flush_cb,
-                          interval_ms, interval_ms);
-            agg_state->timer_active = true;
         }
     }
     
@@ -1074,6 +1076,39 @@ static void update_bucket_with_event(nql_agg_bucket_t* bucket, nblex_event* even
     }
 }
 
+/* Helper: Initialize window timer for aggregation state (lazy initialization) */
+static void ensure_agg_timer_initialized(nql_agg_state_t* agg_state, nblex_world* world) {
+    if (!agg_state || !world || !world->loop) {
+        return;
+    }
+    
+    /* Only initialize if windowing is enabled, timer doesn't exist, and world is started */
+    if (agg_state->window.type != NQL_WINDOW_NONE && 
+        !agg_state->window_timer && 
+        world->started) {
+        agg_state->window_timer = calloc(1, sizeof(uv_timer_t));
+        if (agg_state->window_timer) {
+            uv_timer_init(world->loop, agg_state->window_timer);
+            agg_state->window_timer->data = agg_state;
+
+            uint64_t interval_ms;
+            if (agg_state->window.type == NQL_WINDOW_SESSION) {
+                /* Session window: check frequently for timeout */
+                interval_ms = agg_state->window.timeout_ms / 2;
+                if (interval_ms < 100) interval_ms = 100;
+            } else {
+                /* Tumbling/sliding window */
+                interval_ms = agg_state->window.slide_ms > 0 ?
+                              agg_state->window.slide_ms : agg_state->window.size_ms;
+            }
+
+            uv_timer_start(agg_state->window_timer, window_flush_cb,
+                          interval_ms, interval_ms);
+            agg_state->timer_active = true;
+        }
+    }
+}
+
 /* Execute aggregate query */
 static int execute_aggregate(nql_query_t* query, nblex_event* event, nblex_world* world, const char* query_str) {
     if (!query || query->type != NQL_QUERY_AGGREGATE || !query->data.aggregate || !event) {
@@ -1094,6 +1129,9 @@ static int execute_aggregate(nql_query_t* query, nblex_event* event, nblex_world
     if (!agg_state) {
         return 0;
     }
+    
+    /* Ensure window timer is initialized (lazy initialization for queries created before world start) */
+    ensure_agg_timer_initialized(agg_state, world);
     
     /* Extract group keys */
     size_t group_keys_count = 0;
@@ -1265,14 +1303,16 @@ static nql_corr_state_t* get_corr_state(nql_query_t* query, nblex_world* world, 
     corr_state->right_count = 0;
     corr_state->timer_active = false;
     
-    /* Initialize cleanup timer */
-    if (world->loop) {
-        corr_state->cleanup_timer = calloc(1, sizeof(uv_timer_t));
-        if (corr_state->cleanup_timer) {
-            uv_timer_init(world->loop, corr_state->cleanup_timer);
-            corr_state->cleanup_timer->data = corr_state;
-            uv_timer_start(corr_state->cleanup_timer, corr_cleanup_cb, 1000, 1000);
-            corr_state->timer_active = true;
+    /* Initialize cleanup timer if world is started (will be done lazily otherwise) */
+    if (world->loop && world->started) {
+        if (!corr_state->cleanup_timer) {
+            corr_state->cleanup_timer = calloc(1, sizeof(uv_timer_t));
+            if (corr_state->cleanup_timer) {
+                uv_timer_init(world->loop, corr_state->cleanup_timer);
+                corr_state->cleanup_timer->data = corr_state;
+                uv_timer_start(corr_state->cleanup_timer, corr_cleanup_cb, 1000, 1000);
+                corr_state->timer_active = true;
+            }
         }
     }
     
@@ -1342,6 +1382,17 @@ static int execute_correlate(nql_query_t* query, nblex_event* event, nblex_world
     nql_corr_state_t* corr_state = get_corr_state(query, world, query_str);
     if (!corr_state) {
         return 0;
+    }
+    
+    /* Ensure cleanup timer is initialized (lazy initialization for queries created before world start) */
+    if (world->loop && world->started && !corr_state->cleanup_timer) {
+        corr_state->cleanup_timer = calloc(1, sizeof(uv_timer_t));
+        if (corr_state->cleanup_timer) {
+            uv_timer_init(world->loop, corr_state->cleanup_timer);
+            corr_state->cleanup_timer->data = corr_state;
+            uv_timer_start(corr_state->cleanup_timer, corr_cleanup_cb, 1000, 1000);
+            corr_state->timer_active = true;
+        }
     }
     
     uint64_t window_ns = corr->within_ms * 1000000ULL;
