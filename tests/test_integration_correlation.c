@@ -68,6 +68,8 @@ START_TEST(test_correlation_log_and_network_time_window) {
   ck_assert_int_ge(world->events_correlated, 0);
   ck_assert_int_ge(world->events_processed, 2);
   
+  nblex_input_free(log_input);
+  nblex_input_free(net_input);
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
@@ -108,6 +110,8 @@ START_TEST(test_correlation_outside_time_window) {
   ck_assert_int_eq(world->events_processed, 2);
   ck_assert_int_eq(world->events_correlated, 0);
   
+  nblex_input_free(log_input);
+  nblex_input_free(net_input);
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
@@ -153,6 +157,8 @@ START_TEST(test_correlation_bidirectional_matching) {
   ck_assert_int_ge(world->events_correlated, 0);
   ck_assert_int_ge(world->events_processed, 2);
   
+  nblex_input_free(log_input);
+  nblex_input_free(net_input);
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
@@ -199,6 +205,8 @@ START_TEST(test_correlation_multiple_events) {
   /* Should have at least one correlation */
   ck_assert_int_ge(world->events_correlated, 0);
   
+  nblex_input_free(log_input);
+  nblex_input_free(net_input);
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();

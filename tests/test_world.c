@@ -297,6 +297,8 @@ START_TEST(test_world_event_emission) {
   ck_assert_int_eq(test_captured_event->type, NBLEX_EVENT_LOG);
   
   /* Note: nblex_event_emit frees the event, so we don't free it here */
+  /* Free input */
+  nblex_input_free(input);
   /* Stop before freeing - world_free will handle cleanup */
   nblex_world_stop(world);
   nblex_world_free(world);

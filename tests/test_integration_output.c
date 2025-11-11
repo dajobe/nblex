@@ -53,6 +53,7 @@ START_TEST(test_json_output_serialization) {
   
   free(json_str);
   nblex_event_free(event);
+  nblex_input_free(input);
   nblex_world_stop(world);
   nblex_world_free(world);
 }
@@ -79,6 +80,7 @@ START_TEST(test_json_output_correlation_event) {
   
   free(json_str);
   nblex_event_free(event);
+  nblex_input_free(input);
   nblex_world_stop(world);
   nblex_world_free(world);
 }
@@ -110,6 +112,7 @@ START_TEST(test_output_pipeline_with_event_handler) {
   ck_assert_ptr_ne(level, NULL);
   ck_assert_str_eq(json_string_value(level), "INFO");
   
+  nblex_input_free(input);
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
@@ -142,6 +145,7 @@ START_TEST(test_output_multiple_events) {
   /* Verify events were captured */
   ck_assert_int_ge(test_captured_events_count, 0);
   
+  nblex_input_free(input);
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
