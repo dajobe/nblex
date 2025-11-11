@@ -20,6 +20,7 @@
 #endif
 
 #include <check.h>
+#include <stdlib.h>
 #include "../src/nblex_internal.h"
 
 /* Forward declarations for functions not in public API */
@@ -28,138 +29,170 @@ filter_t* nblex_filter_new(const char* expression);
 void nblex_filter_free(filter_t* filter);
 int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
 
-/* Test suite declaration */
 Suite* filters_suite(void);
 
-START_TEST(test_filter_equals) {
-    /* Create world for testing */
-    nblex_world* world = nblex_world_new();
-    ck_assert_ptr_ne(world, NULL);
+START_TEST(test_filter_equals_string) {
+  nblex_world* world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
 
-    /* Create dummy input */
-    nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
-    ck_assert_ptr_ne(input, NULL);
+  nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
 
-    /* Create filter */
-    filter_t* filter = nblex_filter_new("level == \"INFO\"");
-    ck_assert_ptr_ne(filter, NULL);
+  filter_t* filter = nblex_filter_new("level == \"INFO\"");
+  ck_assert_ptr_ne(filter, NULL);
 
-    /* Create test event */
-    nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
-    ck_assert_ptr_ne(event, NULL);
+  nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
+  ck_assert_ptr_ne(event, NULL);
 
-    json_t* data = json_object();
-    json_object_set_new(data, "level", json_string("INFO"));
-    event->data = data;
+  json_t* data = json_object();
+  json_object_set_new(data, "level", json_string("INFO"));
+  event->data = data;
 
-    /* Test matching */
-    ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
+  /* Test matching */
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
 
-    /* Test non-matching */
-    json_object_set_new(data, "level", json_string("ERROR"));
-    ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
+  /* Test non-matching */
+  json_object_set_new(data, "level", json_string("ERROR"));
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
 
-    /* Cleanup */
-    nblex_event_free(event);
-    nblex_filter_free(filter);
-    nblex_input_free(input);
-    nblex_world_free(world);
+  nblex_event_free(event);
+  nblex_filter_free(filter);
+  nblex_input_free(input);
+  nblex_world_free(world);
 }
 END_TEST
 
-START_TEST(test_filter_numeric) {
-    /* Create world for testing */
-    nblex_world* world = nblex_world_new();
-    ck_assert_ptr_ne(world, NULL);
+START_TEST(test_filter_numeric_comparison) {
+  nblex_world* world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
 
-    /* Create dummy input */
-    nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
-    ck_assert_ptr_ne(input, NULL);
+  nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
 
-    /* Create filter */
-    filter_t* filter = nblex_filter_new("status >= 400");
-    ck_assert_ptr_ne(filter, NULL);
+  filter_t* filter = nblex_filter_new("status >= 400");
+  ck_assert_ptr_ne(filter, NULL);
 
-    /* Create test event */
-    nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
-    ck_assert_ptr_ne(event, NULL);
+  nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
+  ck_assert_ptr_ne(event, NULL);
 
-    json_t* data = json_object();
-    json_object_set_new(data, "status", json_integer(500));
-    event->data = data;
+  json_t* data = json_object();
+  json_object_set_new(data, "status", json_integer(500));
+  event->data = data;
 
-    /* Test matching */
-    ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
+  /* Test matching */
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
 
-    /* Test non-matching */
-    json_object_set_new(data, "status", json_integer(200));
-    ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
+  /* Test non-matching */
+  json_object_set_new(data, "status", json_integer(200));
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
 
-    /* Cleanup */
-    nblex_event_free(event);
-    nblex_filter_free(filter);
-    nblex_input_free(input);
-    nblex_world_free(world);
+  nblex_event_free(event);
+  nblex_filter_free(filter);
+  nblex_input_free(input);
+  nblex_world_free(world);
 }
 END_TEST
 
-START_TEST(test_filter_and_or) {
-    /* Create world for testing */
-    nblex_world* world = nblex_world_new();
-    ck_assert_ptr_ne(world, NULL);
+START_TEST(test_filter_logical_and) {
+  nblex_world* world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
 
-    /* Create dummy input */
-    nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
-    ck_assert_ptr_ne(input, NULL);
+  nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
 
-    /* Create AND filter */
-    filter_t* filter = nblex_filter_new("level == \"ERROR\" AND status >= 500");
-    ck_assert_ptr_ne(filter, NULL);
+  filter_t* filter = nblex_filter_new("level == \"ERROR\" AND status >= 500");
+  ck_assert_ptr_ne(filter, NULL);
 
-    /* Create test event */
-    nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
-    ck_assert_ptr_ne(event, NULL);
+  nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
+  ck_assert_ptr_ne(event, NULL);
 
-    json_t* data = json_object();
-    json_object_set_new(data, "level", json_string("ERROR"));
-    json_object_set_new(data, "status", json_integer(500));
-    event->data = data;
+  json_t* data = json_object();
+  json_object_set_new(data, "level", json_string("ERROR"));
+  json_object_set_new(data, "status", json_integer(500));
+  event->data = data;
 
-    /* Test matching (both conditions true) */
-    ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
+  /* Test matching (both conditions true) */
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
 
-    /* Test non-matching (one condition false) */
-    json_object_set_new(data, "status", json_integer(400));
-    ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
+  /* Test non-matching (one condition false) */
+  json_object_set_new(data, "status", json_integer(400));
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
 
-    /* Cleanup */
-    nblex_event_free(event);
-    nblex_filter_free(filter);
-    nblex_input_free(input);
-    nblex_world_free(world);
+  /* Test non-matching (both conditions false) */
+  json_object_set_new(data, "level", json_string("INFO"));
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
+
+  nblex_event_free(event);
+  nblex_filter_free(filter);
+  nblex_input_free(input);
+  nblex_world_free(world);
+}
+END_TEST
+
+START_TEST(test_filter_logical_or) {
+  nblex_world* world = nblex_world_new();
+  ck_assert_ptr_ne(world, NULL);
+
+  nblex_input* input = nblex_input_new(world, NBLEX_INPUT_FILE);
+  ck_assert_ptr_ne(input, NULL);
+
+  filter_t* filter = nblex_filter_new("level == \"ERROR\" OR status >= 500");
+  ck_assert_ptr_ne(filter, NULL);
+
+  nblex_event* event = nblex_event_new(NBLEX_EVENT_LOG, input);
+  ck_assert_ptr_ne(event, NULL);
+
+  json_t* data = json_object();
+  json_object_set_new(data, "level", json_string("ERROR"));
+  json_object_set_new(data, "status", json_integer(200));
+  event->data = data;
+
+  /* Test matching (first condition true) */
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
+
+  /* Test matching (second condition true) */
+  json_object_set_new(data, "level", json_string("INFO"));
+  json_object_set_new(data, "status", json_integer(500));
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 1);
+
+  /* Test non-matching (both conditions false) */
+  json_object_set_new(data, "status", json_integer(200));
+  ck_assert_int_eq(nblex_filter_matches(filter, event), 0);
+
+  nblex_event_free(event);
+  nblex_filter_free(filter);
+  nblex_input_free(input);
+  nblex_world_free(world);
 }
 END_TEST
 
 Suite* filters_suite(void) {
-    Suite* s = suite_create("Filters");
+  Suite* s = suite_create("Filters");
 
-    TCase* tc_core = tcase_create("Core");
-    tcase_add_test(tc_core, test_filter_equals);
-    tcase_add_test(tc_core, test_filter_numeric);
-    tcase_add_test(tc_core, test_filter_and_or);
-    suite_add_tcase(s, tc_core);
+  TCase* tc_string = tcase_create("String");
+  tcase_add_test(tc_string, test_filter_equals_string);
+  suite_add_tcase(s, tc_string);
 
-    return s;
+  TCase* tc_numeric = tcase_create("Numeric");
+  tcase_add_test(tc_numeric, test_filter_numeric_comparison);
+  suite_add_tcase(s, tc_numeric);
+
+  TCase* tc_logical = tcase_create("Logical");
+  tcase_add_test(tc_logical, test_filter_logical_and);
+  tcase_add_test(tc_logical, test_filter_logical_or);
+  suite_add_tcase(s, tc_logical);
+
+  return s;
 }
 
 int main(void) {
-    int number_failed;
-    Suite* s = filters_suite();
-    SRunner* sr = srunner_create(s);
+  int number_failed;
+  Suite* s = filters_suite();
+  SRunner* sr = srunner_create(s);
 
-    srunner_run_all(sr, CK_NORMAL);
-    number_failed = srunner_ntests_failed(sr);
-    srunner_free(sr);
+  srunner_run_all(sr, CK_NORMAL);
+  number_failed = srunner_ntests_failed(sr);
+  srunner_free(sr);
 
-    return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
+  return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

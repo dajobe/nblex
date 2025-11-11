@@ -30,8 +30,18 @@ target_link_libraries(test_parsers nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 add_executable(test_filters test_filters.c)
 target_link_libraries(test_filters nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
-add_executable(test_nql test_nql.c)
-target_link_libraries(test_nql nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+# nQL tests - split into logical modules
+add_executable(test_nql_parse test_nql_parse.c)
+target_link_libraries(test_nql_parse nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
+add_executable(test_nql_execute test_nql_execute.c test_helpers.c)
+target_link_libraries(test_nql_execute nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
+add_executable(test_nql_windows test_nql_windows.c test_helpers.c)
+target_link_libraries(test_nql_windows nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
+add_executable(test_nql_schema test_nql_schema.c test_helpers.c)
+target_link_libraries(test_nql_schema nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
 add_executable(test_file_input test_file_input.c)
 target_link_libraries(test_file_input nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
@@ -42,7 +52,10 @@ target_link_libraries(test_metrics_output nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRA
 # Register tests
 add_test(NAME parsers COMMAND test_parsers)
 add_test(NAME filters COMMAND test_filters)
-add_test(NAME nql COMMAND test_nql)
+add_test(NAME nql_parse COMMAND test_nql_parse)
+add_test(NAME nql_execute COMMAND test_nql_execute)
+add_test(NAME nql_windows COMMAND test_nql_windows)
+add_test(NAME nql_schema COMMAND test_nql_schema)
 add_test(NAME file_input COMMAND test_file_input)
 add_test(NAME metrics_output COMMAND test_metrics_output)
 
