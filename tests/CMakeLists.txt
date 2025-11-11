@@ -36,10 +36,14 @@ target_link_libraries(test_nql nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 add_executable(test_file_input test_file_input.c)
 target_link_libraries(test_file_input nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
 
+add_executable(test_metrics_output test_metrics_output.c)
+target_link_libraries(test_metrics_output nblex ${CHECK_LIBRARY} ${SUBUNIT_LIBRARY} m)
+
 # Register tests
 add_test(NAME parsers COMMAND test_parsers)
 add_test(NAME filters COMMAND test_filters)
 add_test(NAME nql COMMAND test_nql)
 add_test(NAME file_input COMMAND test_file_input)
+add_test(NAME metrics_output COMMAND test_metrics_output)
 
 message(STATUS "Unit tests configured")
