@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Status:** Draft
-**Last Updated:** 2025-11-08
+**Last Updated:** 2025-11-10
 
 ______________________________________________________________________
 
@@ -51,17 +51,17 @@ ______________________________________________________________________
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                        nblex Core                            │
-│                                                              │
-│  ┌─────────────┐      ┌──────────────┐      ┌────────────┐ │
-│  │   Inputs    │─────▶│   Stream     │─────▶│  Outputs   │ │
-│  │             │      │  Processor   │      │            │ │
-│  │ • Files     │      │              │      │ • stdout   │ │
-│  │ • Sockets   │      │ • Parse      │      │ • Files    │ │
-│  │ • pcap      │      │ • Filter     │      │ • HTTP     │ │
-│  │ • Journals  │      │ • Correlate  │      │ • Metrics  │ │
-│  └─────────────┘      │ • Aggregate  │      │ • Alerts   │ │
-│                       └──────────────┘      └────────────┘ │
+│                        nblex Core                           │
+│                                                             │
+│  ┌─────────────┐      ┌──────────────┐      ┌────────────┐  │
+│  │   Inputs    │─────▶│   Stream     │─────▶│  Outputs   │  │
+│  │             │      │  Processor   │      │            │  │
+│  │ • Files     │      │              │      │ • stdout   │  │
+│  │ • Sockets   │      │ • Parse      │      │ • Files    │  │
+│  │ • pcap      │      │ • Filter     │      │ • HTTP     │  │
+│  │ • Journals  │      │ • Correlate  │      │ • Metrics  │  │
+│  └─────────────┘      │ • Aggregate  │      │ • Alerts   │  │
+│                       └──────────────┘      └────────────┘  │
 │                              │                              │
 │                       ┌──────▼───────┐                      │
 │                       │  Correlation │                      │
@@ -212,6 +212,7 @@ ______________________________________________________________________
 #### Basic Log Processing
 
 - [x] File tailing with rotation detection
+- [x] File input watching with libuv fs_event support
 - [x] JSON log parsing
 - [x] Logfmt parsing
 - [x] Common log formats (Apache, Nginx, syslog)
@@ -229,6 +230,8 @@ ______________________________________________________________________
 - [x] JSON log parsing
 - [x] Logfmt parsing
 - [x] Syslog parsing (RFC 5424, RFC 3164)
+- [x] Nginx log format parsing
+- [x] Automatic format detection
 - [x] Custom regex patterns
 
 #### Network Protocol Dissection
@@ -249,7 +252,7 @@ ______________________________________________________________________
 
 nblex uses a lightweight, filter-first query language (nQL) optimized for streaming log and network correlation. nQL is simpler than SQL, designed for real-time event processing, and builds on the existing filter expression syntax.
 
-**Current status (2025-11-09, updated):**
+**Current status (2025-11-10, updated):**
 
 - [x] Parser refactored with shared AST header and extended `nql_parse_ex` API
 - [x] Executor updated to respect multi-stage pipelines
@@ -257,9 +260,12 @@ nblex uses a lightweight, filter-first query language (nQL) optimized for stream
 - [x] Decision: derived query results will be emitted as synthetic `nblex_event` instances
 - [x] SELECT, WHERE, GROUP BY (basic implementation)
 - [x] Field-based filtering
-- [~] **IN PROGRESS:** Implement aggregation state, windowing, and correlation outputs in executor
-- [~] **IN PROGRESS:** Define and document derived-event payload schema for downstream outputs
-- [ ] Extend tests to cover aggregates, correlations, and advanced pipelines end-to-end
+- [x] Aggregation state management implemented with lazy timer initialization
+- [x] Windowing support (tumbling, sliding, session windows)
+- [x] Correlation query execution with bidirectional matching
+- [x] Derived-event payload schema defined and documented (see `docs/derived-event-schema.md`)
+- [x] Comprehensive test suite refactored into logical modules (parse, execute, windows, schema)
+- [x] Tests for aggregates, correlations, and advanced pipelines end-to-end
 
 **Core Syntax:**
 
@@ -306,7 +312,7 @@ show log.service, log.message, network.latency_ms where log.level == ERROR
 - [x] JSON output
 - [x] File output
 - [x] HTTP output
-- [x] Metrics output (Prometheus)
+- [x] Metrics output (Prometheus) with aggregation metrics export
 
 #### Configuration & CLI
 
@@ -324,11 +330,19 @@ nblex monitor \
 #### Testing
 
 - [x] Parser unit tests (>70% coverage for core parsers)
-- [x] Filter engine unit tests (basic coverage)
+- [x] Filter engine unit tests (comprehensive coverage)
+- [x] nQL parser tests (test_nql_parse.c)
+- [x] nQL execution tests (test_nql_execute.c) - filters, pipelines, aggregates, correlations
+- [x] nQL windowing tests (test_nql_windows.c) - tumbling, sliding, session windows
+- [x] nQL schema validation tests (test_nql_schema.c) - aggregate and correlation event schemas
+- [x] Derived event schema tests
+- [x] Metrics output tests (test_metrics_output.c) - aggregation metrics export
+- [x] Shared test helpers for event creation and capture
 - [ ] Integration tests
 
 #### Documentation
 
+- [x] Derived event payload schema documentation (`docs/derived-event-schema.md`)
 - [ ] API documentation
 - [ ] User guide
 
@@ -351,11 +365,11 @@ ______________________________________________________________________
 
 #### Enhanced Query Language (nQL)
 
-- [ ] Aggregation state management
-- [ ] Windowing (tumbling, sliding, session windows)
-- [ ] Correlation query execution
-- [ ] Derived-event payload schema definition
-- [ ] Advanced pipeline support
+- [x] Aggregation state management (completed in Phase 2)
+- [x] Windowing (tumbling, sliding, session windows) (completed in Phase 2)
+- [x] Correlation query execution (completed in Phase 2)
+- [x] Derived-event payload schema definition (completed in Phase 2)
+- [ ] Advanced pipeline support (multi-stage optimizations)
 
 #### Enhanced Correlation
 
@@ -1080,7 +1094,6 @@ ______________________________________________________________________
 - [ ] Integration tests
 - [ ] API documentation
 - [ ] User guide
-- [ ] nQL aggregation state, windowing, and correlation outputs
 
 **Success Criteria:**
 
