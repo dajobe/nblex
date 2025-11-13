@@ -30,22 +30,26 @@
 
 Suite* integration_output_formatters_suite(void);
 
+/* Use actual output types from nblex_internal.h */
+typedef struct file_output_s file_output_t;
+typedef struct http_output_s http_output_t;
+typedef struct metrics_output_s metrics_output_t;
+
 /* Declare external functions from output modules */
-extern void* nblex_file_output_new(const char* path, const char* format);
-extern void nblex_file_output_free(void* output);
-extern int nblex_file_output_write(void* output, nblex_event* event);
-extern int nblex_file_output_set_rotation(void* output, int max_size_mb, int max_age_days, int max_count);
+extern file_output_t* nblex_file_output_new(const char* path, const char* format);
+extern void nblex_file_output_free(file_output_t* output);
+extern int nblex_file_output_write(file_output_t* output, nblex_event* event);
+extern void nblex_file_output_set_rotation(file_output_t* output, int max_size_mb, int max_age_days, int max_count);
 
-extern void* nblex_http_output_new(const char* url);
-extern void nblex_http_output_free(void* output);
-extern int nblex_http_output_send(void* output, nblex_event* event);
-extern int nblex_http_output_set_method(void* output, const char* method);
-extern int nblex_http_output_set_timeout(void* output, int timeout_seconds);
+extern http_output_t* nblex_http_output_new(const char* url);
+extern void nblex_http_output_free(http_output_t* output);
+extern int nblex_http_output_write(http_output_t* output, nblex_event* event);
+extern void nblex_http_output_set_method(http_output_t* output, const char* method);
+extern void nblex_http_output_set_timeout(http_output_t* output, int timeout_seconds);
 
-extern void* nblex_metrics_output_new(int port);
-extern void nblex_metrics_output_free(void* output);
-extern int nblex_metrics_output_record(void* output, nblex_event* event);
-extern char* nblex_metrics_output_format(void* output);
+extern metrics_output_t* nblex_metrics_output_new(const char* path, const char* format);
+extern void nblex_metrics_output_free(metrics_output_t* output);
+extern int nblex_metrics_output_write(metrics_output_t* output, nblex_event* event);
 
 START_TEST(test_file_output_write_and_rotation) {
   /* Test file output with rotation management */
@@ -58,12 +62,11 @@ START_TEST(test_file_output_write_and_rotation) {
   snprintf(output_path, sizeof(output_path), "%s/test.log", temp_dir);
 
   /* Create file output */
-  void* file_out = nblex_file_output_new(output_path, "json");
+  file_output_t* file_out = nblex_file_output_new(output_path, "json");
   ck_assert_ptr_ne(file_out, NULL);
 
   /* Configure rotation: 1MB max size */
-  int result = nblex_file_output_set_rotation(file_out, 1, 0, 3);
-  ck_assert_int_eq(result, 0);
+  nblex_file_output_set_rotation(file_out, 1, 0, 3);
 
   /* Create test event */
   nblex_world* world = nblex_world_new();
@@ -77,7 +80,7 @@ START_TEST(test_file_output_write_and_rotation) {
   json_object_set_new(event->data, "message", json_string("Test error message"));
 
   /* Write event */
-  result = nblex_file_output_write(file_out, event);
+  int result = nblex_file_output_write(file_out, event);
   ck_assert_int_eq(result, 0);
 
   /* Verify file was created and contains data */
@@ -121,7 +124,7 @@ START_TEST(test_file_output_multiple_events) {
   char output_path[1024];
   snprintf(output_path, sizeof(output_path), "%s/test.log", temp_dir);
 
-  void* file_out = nblex_file_output_new(output_path, "json");
+  file_output_t* file_out = nblex_file_output_new(output_path, "json");
   ck_assert_ptr_ne(file_out, NULL);
 
   nblex_world* world = nblex_world_new();
@@ -167,26 +170,24 @@ END_TEST
 START_TEST(test_http_output_configuration) {
   /* Test HTTP output configuration */
 
-  void* http_out = nblex_http_output_new("http://localhost:8080/webhook");
+  http_output_t* http_out = nblex_http_output_new("http://localhost:8080/webhook");
   ck_assert_ptr_ne(http_out, NULL);
 
   /* Set method */
-  int result = nblex_http_output_set_method(http_out, "PUT");
-  ck_assert_int_eq(result, 0);
+  nblex_http_output_set_method(http_out, "PUT");
 
   /* Set timeout */
-  result = nblex_http_output_set_timeout(http_out, 60);
-  ck_assert_int_eq(result, 0);
+  nblex_http_output_set_timeout(http_out, 60);
 
   /* Cleanup */
   nblex_http_output_free(http_out);
 }
 END_TEST
 
-START_TEST(test_http_output_send) {
-  /* Test HTTP output send (will fail to connect, but tests the code path) */
+START_TEST(test_http_output_write) {
+  /* Test HTTP output write (will fail to connect, but tests the code path) */
 
-  void* http_out = nblex_http_output_new("http://localhost:9999/test");
+  http_output_t* http_out = nblex_http_output_new("http://localhost:9999/test");
   ck_assert_ptr_ne(http_out, NULL);
 
   nblex_http_output_set_timeout(http_out, 1); /* Short timeout */
@@ -201,7 +202,7 @@ START_TEST(test_http_output_send) {
   json_object_set_new(event->data, "test", json_string("value"));
 
   /* This will fail to connect, but should handle gracefully */
-  int result = nblex_http_output_send(http_out, event);
+  int result = nblex_http_output_write(http_out, event);
   /* We expect failure since there's no server listening */
   ck_assert_int_ne(result, 0);
 
@@ -213,10 +214,10 @@ START_TEST(test_http_output_send) {
 }
 END_TEST
 
-START_TEST(test_prometheus_metrics_format) {
-  /* Test Prometheus metrics output format */
+START_TEST(test_metrics_output_basic) {
+  /* Test basic metrics output */
 
-  void* metrics_out = nblex_metrics_output_new(9090);
+  metrics_output_t* metrics_out = nblex_metrics_output_new("/tmp/nblex_metrics.txt", "prometheus");
   ck_assert_ptr_ne(metrics_out, NULL);
 
   nblex_world* world = nblex_world_new();
@@ -230,22 +231,15 @@ START_TEST(test_prometheus_metrics_format) {
     event->data = json_object();
     json_object_set_new(event->data, "level", json_string("ERROR"));
 
-    nblex_metrics_output_record(metrics_out, event);
+    nblex_metrics_output_write(metrics_out, event);
     nblex_event_free(event);
   }
 
-  /* Format metrics */
-  char* metrics_text = nblex_metrics_output_format(metrics_out);
-  ck_assert_ptr_ne(metrics_text, NULL);
-
-  /* Verify it contains Prometheus-style metrics */
-  ck_assert_ptr_ne(strstr(metrics_text, "nblex_"), NULL);
-
   /* Cleanup */
-  free(metrics_text);
   nblex_input_free(input);
   nblex_world_free(world);
   nblex_metrics_output_free(metrics_out);
+  unlink("/tmp/nblex_metrics.txt");
 }
 END_TEST
 
@@ -259,11 +253,11 @@ Suite* integration_output_formatters_suite(void) {
 
   TCase* tc_http = tcase_create("HTTP Output");
   tcase_add_test(tc_http, test_http_output_configuration);
-  tcase_add_test(tc_http, test_http_output_send);
+  tcase_add_test(tc_http, test_http_output_write);
   suite_add_tcase(s, tc_http);
 
   TCase* tc_metrics = tcase_create("Metrics Output");
-  tcase_add_test(tc_metrics, test_prometheus_metrics_format);
+  tcase_add_test(tc_metrics, test_metrics_output_basic);
   suite_add_tcase(s, tc_metrics);
 
   return s;
