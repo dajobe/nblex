@@ -34,6 +34,7 @@ nblex/version.h
 # IDE files
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
