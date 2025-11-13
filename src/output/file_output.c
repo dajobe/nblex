@@ -11,6 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <libgen.h>
+#include <unistd.h>
 
 /* File output state */
 struct file_output_s {
@@ -24,6 +29,130 @@ struct file_output_s {
     long current_size;
 };
 typedef struct file_output_s file_output_t;
+
+/* Entry for tracking rotated files */
+typedef struct {
+    char* path;
+    time_t mtime;
+} rotated_file_entry;
+
+/* Compare function for qsort - newest first */
+static int compare_rotated_files(const void* a, const void* b) {
+    const rotated_file_entry* fa = (const rotated_file_entry*)a;
+    const rotated_file_entry* fb = (const rotated_file_entry*)b;
+
+    if (fa->mtime > fb->mtime) return -1;
+    if (fa->mtime < fb->mtime) return 1;
+    return 0;
+}
+
+/* Clean up old rotated files */
+static void cleanup_old_rotated_files(file_output_t* output) {
+    if (output->rotation_max_count <= 0) {
+        return;  /* No limit set */
+    }
+
+    /* Extract directory and basename from path */
+    char* path_copy1 = strdup(output->path);
+    if (!path_copy1) {
+        return;
+    }
+
+    char* path_copy2 = strdup(output->path);
+    if (!path_copy2) {
+        free(path_copy1);
+        return;
+    }
+
+    /* basename() and dirname() may modify the string, so use separate copies */
+    char* dir_name = dirname(path_copy1);
+    char* base_name = basename(path_copy2);
+
+    /* Copy the results as they might point to static buffers */
+    char dir_buf[1024];
+    char base_buf[256];
+    snprintf(dir_buf, sizeof(dir_buf), "%s", dir_name);
+    snprintf(base_buf, sizeof(base_buf), "%s", base_name);
+
+    /* Free the path copies */
+    free(path_copy1);
+    free(path_copy2);
+
+    /* Open directory */
+    DIR* dir = opendir(dir_buf);
+    if (!dir) {
+        return;
+    }
+
+    /* Build list of rotated files */
+    rotated_file_entry* files = NULL;
+    size_t files_count = 0;
+    size_t files_capacity = 0;
+
+    struct dirent* entry;
+    size_t base_len = strlen(base_buf);
+
+    while ((entry = readdir(dir)) != NULL) {
+        /* Check if filename starts with basename and has a timestamp suffix */
+        if (strncmp(entry->d_name, base_buf, base_len) == 0 &&
+            entry->d_name[base_len] == '.') {
+
+            /* Verify it looks like a timestamp (YYYYMMDD_HHMMSS) */
+            const char* timestamp_part = entry->d_name + base_len + 1;
+            if (strlen(timestamp_part) >= 15 &&
+                timestamp_part[8] == '_') {
+
+                /* Build full path */
+                char full_path[1024];
+                snprintf(full_path, sizeof(full_path), "%s/%s", dir_buf, entry->d_name);
+
+                /* Get modification time */
+                struct stat st;
+                if (stat(full_path, &st) == 0) {
+                    /* Add to list */
+                    if (files_count >= files_capacity) {
+                        files_capacity = files_capacity ? files_capacity * 2 : 16;
+                        rotated_file_entry* new_files = realloc(files,
+                            files_capacity * sizeof(rotated_file_entry));
+                        if (!new_files) {
+                            break;
+                        }
+                        files = new_files;
+                    }
+
+                    files[files_count].path = strdup(full_path);
+                    files[files_count].mtime = st.st_mtime;
+                    if (files[files_count].path) {
+                        files_count++;
+                    }
+                }
+            }
+        }
+    }
+
+    closedir(dir);
+
+    /* If we have more files than max_count, delete oldest ones */
+    if (files_count > (size_t)output->rotation_max_count) {
+        /* Sort by modification time (newest first) */
+        qsort(files, files_count, sizeof(rotated_file_entry), compare_rotated_files);
+
+        /* Delete files beyond max_count */
+        for (size_t i = output->rotation_max_count; i < files_count; i++) {
+            if (unlink(files[i].path) != 0) {
+                /* Log error but continue */
+                fprintf(stderr, "Warning: Failed to delete old rotated file %s: %s\n",
+                       files[i].path, strerror(errno));
+            }
+        }
+    }
+
+    /* Free file list */
+    for (size_t i = 0; i < files_count; i++) {
+        free(files[i].path);
+    }
+    free(files);
+}
 
 /* Rotate file if needed */
 static int rotate_file_if_needed(file_output_t* output) {
@@ -67,7 +196,8 @@ static int rotate_file_if_needed(file_output_t* output) {
 
     rename(output->path, rotated_path);
 
-    /* TODO: Clean up old rotated files based on rotation_max_count */
+    /* Clean up old rotated files if count limit is set */
+    cleanup_old_rotated_files(output);
 
     /* Open new file */
     output->file = fopen(output->path, "a");
