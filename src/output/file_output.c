@@ -68,15 +68,27 @@ static void cleanup_old_rotated_files(file_output_t* output) {
     char* dir_name = dirname(path_copy1);
     char* base_name = basename(path_copy2);
 
-    /* Copy the results as they might point to static buffers */
+    /* Validate results */
+    if (!dir_name || !base_name) {
+        free(path_copy1);
+        free(path_copy2);
+        return;
+    }
+
+    /* Copy the results as they might point to static buffers or the input */
     char dir_buf[1024];
     char base_buf[256];
     snprintf(dir_buf, sizeof(dir_buf), "%s", dir_name);
     snprintf(base_buf, sizeof(base_buf), "%s", base_name);
 
-    /* Free the path copies */
+    /* Free the path copies after copying the results */
     free(path_copy1);
     free(path_copy2);
+
+    /* Validate the copied results */
+    if (strlen(dir_buf) == 0 || strlen(base_buf) == 0) {
+        return;
+    }
 
     /* Open directory */
     DIR* dir = opendir(dir_buf);
@@ -115,7 +127,13 @@ static void cleanup_old_rotated_files(file_output_t* output) {
                         rotated_file_entry* new_files = realloc(files,
                             files_capacity * sizeof(rotated_file_entry));
                         if (!new_files) {
-                            break;
+                            /* Cleanup and return on allocation failure */
+                            for (size_t j = 0; j < files_count; j++) {
+                                free(files[j].path);
+                            }
+                            free(files);
+                            closedir(dir);
+                            return;
                         }
                         files = new_files;
                     }
@@ -133,12 +151,12 @@ static void cleanup_old_rotated_files(file_output_t* output) {
     closedir(dir);
 
     /* If we have more files than max_count, delete oldest ones */
-    if (files_count > (size_t)output->rotation_max_count) {
+    if (files && files_count > (size_t)output->rotation_max_count) {
         /* Sort by modification time (newest first) */
         qsort(files, files_count, sizeof(rotated_file_entry), compare_rotated_files);
 
         /* Delete files beyond max_count */
-        for (size_t i = output->rotation_max_count; i < files_count; i++) {
+        for (size_t i = (size_t)output->rotation_max_count; i < files_count; i++) {
             if (unlink(files[i].path) != 0) {
                 /* Log error but continue */
                 fprintf(stderr, "Warning: Failed to delete old rotated file %s: %s\n",
@@ -148,10 +166,12 @@ static void cleanup_old_rotated_files(file_output_t* output) {
     }
 
     /* Free file list */
-    for (size_t i = 0; i < files_count; i++) {
-        free(files[i].path);
+    if (files) {
+        for (size_t i = 0; i < files_count; i++) {
+            free(files[i].path);
+        }
+        free(files);
     }
-    free(files);
 }
 
 /* Rotate file if needed */

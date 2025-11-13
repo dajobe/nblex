@@ -59,17 +59,27 @@ nblex_input* nblex_input_file_new(nblex_world* world, const char* path) {
   }
 
   /* Extract directory and filename for file watching */
-  char* path_copy = nblex_strdup(path);
-  if (!path_copy) {
+  /* Need two copies because dirname() and basename() may modify their inputs */
+  char* path_copy1 = nblex_strdup(path);
+  char* path_copy2 = nblex_strdup(path);
+  if (!path_copy1 || !path_copy2) {
+    if (path_copy1) free(path_copy1);
+    if (path_copy2) free(path_copy2);
     free(data->path);
     free(data);
     free(input);
     return NULL;
   }
 
-  data->dir_path = nblex_strdup(dirname(path_copy));
-  data->filename = nblex_strdup(basename(path_copy));
-  free(path_copy);
+  /* Call dirname and basename, then copy results before freeing */
+  char* dir_result = dirname(path_copy1);
+  char* base_result = basename(path_copy2);
+
+  data->dir_path = dir_result ? nblex_strdup(dir_result) : NULL;
+  data->filename = base_result ? nblex_strdup(base_result) : NULL;
+
+  free(path_copy1);
+  free(path_copy2);
 
   if (!data->dir_path || !data->filename) {
     if (data->dir_path) free(data->dir_path);
