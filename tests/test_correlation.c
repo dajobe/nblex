@@ -90,7 +90,7 @@ START_TEST(test_correlation_start) {
   uv_timer_stop(&corr->cleanup_timer);
   /* Let nblex_correlation_free handle closing the timer */
   nblex_correlation_free(corr);
-  /* Run event loop to process timer close callback */
+  /* Run event loop to process timer close callbacks (required for libuv cleanup) */
   for (int i = 0; i < 10 && uv_loop_alive(world->loop); i++) {
     uv_run(world->loop, UV_RUN_ONCE);
   }

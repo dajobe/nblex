@@ -74,10 +74,7 @@ START_TEST(test_nql_e2e_simple_filter) {
   nql_execute(query, info_event, world);
   nblex_event_emit(world, info_event);
 
-  /* Process events */
-  for (int i = 0; i < 20; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Should have captured only ERROR event */
   ck_assert_int_ge(test_captured_events_count, 1);
@@ -130,10 +127,7 @@ START_TEST(test_pipeline_filter_aggregate_output) {
     nblex_event_emit(world, event);
   }
 
-  /* Process events */
-  for (int i = 0; i < 50; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Should have captured all events */
   ck_assert_int_eq(test_captured_events_count, 8);
@@ -187,10 +181,7 @@ START_TEST(test_pipeline_correlation_aggregation_metrics) {
     nblex_event_emit(world, net_event);
   }
 
-  /* Process events */
-  for (int i = 0; i < 50; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify events were processed (basic pipeline test) */
   ck_assert_int_ge(test_captured_events_count, 6);
@@ -237,10 +228,7 @@ START_TEST(test_pipeline_complex_multi_stage) {
     nblex_event_emit(world, event);
   }
 
-  /* Process events */
-  for (int i = 0; i < 50; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify events were processed (basic pipeline test) */
   ck_assert_int_ge(test_captured_events_count, 9);
@@ -289,10 +277,7 @@ START_TEST(test_pipeline_windowing) {
     }
   }
 
-  /* Process events */
-  for (int i = 0; i < 50; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events and aggregation results are processed synchronously */
 
   /* Should have 3 aggregation results (one per group) */
   int window_results = 0;

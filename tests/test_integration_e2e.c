@@ -88,10 +88,7 @@ START_TEST(test_e2e_file_and_network_simultaneously) {
     fclose(fp);
   }
 
-  /* Run event loop to process all events */
-  for (int i = 0; i < 20; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify events were processed */
   ck_assert_int_ge(world->events_processed, 3); /* At least 3 log events + 1 network event */
@@ -148,10 +145,7 @@ START_TEST(test_e2e_log_correlation_output_pipeline) {
   nblex_event_emit(world, log_event);
   nblex_event_emit(world, net_event);
 
-  /* Run event loop to process correlation */
-  for (int i = 0; i < 20; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify events were processed and potentially correlated */
   ck_assert_int_eq(world->events_processed, 2);
@@ -270,10 +264,7 @@ START_TEST(test_e2e_multiple_formats) {
     fclose(fp);
   }
 
-  /* Run event loop */
-  for (int i = 0; i < 20; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify all events were processed */
   ck_assert_int_eq(world->events_processed, 3);
@@ -324,10 +315,7 @@ START_TEST(test_e2e_pcap_file_offline) {
     nblex_event_emit(world, event);
   }
 
-  /* Run event loop */
-  for (int i = 0; i < 20; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify packets were processed */
   ck_assert_int_eq(world->events_processed, 5);

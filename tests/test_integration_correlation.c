@@ -58,12 +58,9 @@ START_TEST(test_correlation_log_and_network_time_window) {
   
   /* Emit network event - should correlate */
   nblex_event_emit(world, net_event);
-  
-  /* Run event loop to process correlation */
-  for (int i = 0; i < 10; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
-  
+
+  /* Events are processed synchronously by nblex_event_emit */
+
   /* Verify correlation occurred */
   ck_assert_int_ge(world->events_correlated, 0);
   ck_assert_int_ge(world->events_processed, 2);
@@ -100,12 +97,9 @@ START_TEST(test_correlation_outside_time_window) {
   
   nblex_event_emit(world, log_event);
   nblex_event_emit(world, net_event);
-  
-  /* Run event loop */
-  for (int i = 0; i < 10; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
-  
+
+  /* Events are processed synchronously by nblex_event_emit */
+
   /* Events should be processed but not correlated */
   ck_assert_int_eq(world->events_processed, 2);
   ck_assert_int_eq(world->events_correlated, 0);
@@ -147,12 +141,9 @@ START_TEST(test_correlation_bidirectional_matching) {
   
   /* Process log event - should correlate (bidirectional) */
   nblex_event_emit(world, log_event);
-  
-  /* Run event loop */
-  for (int i = 0; i < 10; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
-  
+
+  /* Events are processed synchronously by nblex_event_emit */
+
   /* Should have correlation */
   ck_assert_int_ge(world->events_correlated, 0);
   ck_assert_int_ge(world->events_processed, 2);
@@ -194,12 +185,9 @@ START_TEST(test_correlation_multiple_events) {
   json_object_set_new(net_event->data, "dst_port", json_integer(3306));
   
   nblex_event_emit(world, net_event);
-  
-  /* Run event loop */
-  for (int i = 0; i < 10; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
-  
+
+  /* Events are processed synchronously by nblex_event_emit */
+
   /* Should have processed all events */
   ck_assert_int_ge(world->events_processed, 4);
   /* Should have at least one correlation */

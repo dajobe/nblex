@@ -141,10 +141,7 @@ START_TEST(test_buffer_size_limits) {
   size_t final_buffer = nblex_world_get_buffer_usage(world);
   ck_assert_int_le(final_buffer, 1 * 1024 * 1024);
 
-  /* Process events to drain buffer */
-  for (int i = 0; i < 50; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Buffer should be reduced after processing */
   size_t after_process = nblex_world_get_buffer_usage(world);
@@ -183,10 +180,7 @@ START_TEST(test_event_rate_limiting) {
     nblex_event_emit(world, event);
   }
 
-  /* Process events */
-  for (int i = 0; i < 50; i++) {
-    uv_run(world->loop, UV_RUN_ONCE);
-  }
+  /* Events are processed synchronously by nblex_event_emit */
 
   /* Verify events were processed */
   ck_assert_int_ge(world->events_processed, burst_size / 2);
