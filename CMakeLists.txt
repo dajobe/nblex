@@ -137,7 +137,6 @@ set(NBLEX_SOURCES
 
     # Utilities
     src/util/memory.c
-    src/util/buffer.c
 )
 
 # Build shared library

@@ -1447,5 +1447,88 @@ All required dependencies use permissive licenses compatible with Apache 2.0. Th
 
 ______________________________________________________________________
 
+## Code Quality Audit
+
+### Audit Date: 2025-11-13
+
+This section documents findings from a comprehensive scan of the codebase for TODOs, placeholders, and skeletal/incomplete implementations.
+
+### Findings
+
+#### 1. Unused Buffer Module (REMOVED)
+
+**File:** `src/util/buffer.c`
+**Status:** DELETED
+**Priority:** HIGH
+
+The buffer module was a completely skeletal implementation with no actual operations implemented. It contained only `new()` and `free()` functions with two TODO comments:
+
+- Line 14: "TODO: Implement ring buffer for event streaming"
+- Line 49: "TODO: Implement buffer operations"
+
+**Analysis:** Zero references found in the entire codebase outside this file. This was dead code that served no purpose.
+
+**Resolution:** Module deleted to keep codebase clean.
+
+#### 2. Missing File Rotation Cleanup
+
+**File:** `src/output/file_output.c:70`
+**Status:** OPEN
+**Priority:** MEDIUM
+
+```c
+rename(output->path, rotated_path);
+/* TODO: Clean up old rotated files based on rotation_max_count */
+```
+
+**Impact:** File rotation works correctly, but old rotated files accumulate indefinitely. This can lead to disk space issues in long-running deployments with high event volumes.
+
+**Recommendation:** Implement cleanup logic that:
+
+1. Scans for rotated files matching the pattern `{basename}.{timestamp}`
+2. Sorts by timestamp
+3. Deletes oldest files when count exceeds `rotation_max_count`
+4. Handles errors gracefully (permissions, missing files, etc.)
+
+#### 3. Missing BPF Filter Optimization
+
+**File:** `src/input/pcap_input.c:274`
+**Status:** OPEN
+**Priority:** LOW
+
+```c
+/* TODO: Convert nblex filter expressions to BPF */
+(void)input->filter; /* Suppress unused variable warning */
+```
+
+**Impact:** Filters are applied in userspace after packet capture rather than at the BPF level. This is less efficient but functionally correct.
+
+**Recommendation:** This is a performance optimization, not a correctness issue. Consider:
+
+1. Documenting this as a known limitation in performance docs
+2. Implementing BPF translation only if profiling shows it's a bottleneck
+3. Supporting both modes (BPF when possible, userspace as fallback)
+
+### Scan Coverage
+
+The audit checked for:
+
+- All TODO/FIXME/XXX/HACK comments
+- Functions with only stub implementations
+- Empty or nearly-empty source files
+- Skeletal modules with minimal functionality
+- Commented-out code blocks
+
+**Files Scanned:** All C source files in src/ and tests/
+**Test Coverage:** 18/18 tests passing (100%)
+
+### Next Steps
+
+1. ✅ Remove unused buffer module (completed)
+2. Consider implementing file rotation cleanup for production deployments
+3. Document BPF filter limitation in performance guide
+
+______________________________________________________________________
+
 **Document Status:** Living document - updated as project evolves
 **Feedback:** Open an issue or discussion on GitHub

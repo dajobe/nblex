@@ -275,11 +275,6 @@ void* nblex_realloc(void* ptr, size_t size);
 void nblex_free(void* ptr);
 char* nblex_strdup(const char* s);
 
-/* Buffer utilities */
-typedef struct nblex_buffer_s nblex_buffer;
-nblex_buffer* nblex_buffer_new(size_t initial_capacity);
-void nblex_buffer_free(nblex_buffer* buf);
-
 /* Events */
 nblex_event* nblex_event_new(nblex_event_type type, nblex_input* input);
 void nblex_event_free(nblex_event* event);
