@@ -97,8 +97,7 @@ START_TEST(test_e2e_file_and_network_simultaneously) {
   /* Cleanup */
   unlink(temp_file);
   free(temp_file);
-  nblex_input_free(file_input);
-  nblex_input_free(net_input);
+  /* Don't free inputs directly - world_free will handle them */
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
@@ -147,8 +146,8 @@ START_TEST(test_e2e_log_correlation_output_pipeline) {
 
   /* Events are processed synchronously by nblex_event_emit */
 
-  /* Verify events were processed and potentially correlated */
-  ck_assert_int_eq(world->events_processed, 2);
+  /* Verify events were processed and correlated (correlation engine emits an extra event) */
+  ck_assert_int_eq(world->events_processed, 3);
   ck_assert_int_ge(test_captured_events_count, 2);
 
   /* Verify we captured both log and network events */
@@ -167,8 +166,7 @@ START_TEST(test_e2e_log_correlation_output_pipeline) {
   ck_assert(found_network);
 
   /* Cleanup */
-  nblex_input_free(log_input);
-  nblex_input_free(net_input);
+  /* Don't free inputs directly - world_free will handle them */
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();
@@ -277,9 +275,7 @@ START_TEST(test_e2e_multiple_formats) {
   free(json_file);
   free(logfmt_file);
   free(syslog_file);
-  nblex_input_free(json_input);
-  nblex_input_free(logfmt_input);
-  nblex_input_free(syslog_input);
+  /* Don't free inputs directly - world_free will handle them */
   nblex_world_stop(world);
   nblex_world_free(world);
   test_reset_captured_events();

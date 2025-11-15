@@ -169,11 +169,13 @@ int nblex_world_stop(nblex_world* world) {
     return -1;
   }
 
-  /* Stop all inputs */
-  for (size_t i = 0; i < world->inputs_count; i++) {
-    nblex_input* input = world->inputs[i];
-    if (input && input->vtable && input->vtable->stop) {
-      input->vtable->stop(input);
+  /* Stop all inputs - check if inputs array exists */
+  if (world->inputs) {
+    for (size_t i = 0; i < world->inputs_count; i++) {
+      nblex_input* input = world->inputs[i];
+      if (input && input->vtable && input->vtable->stop) {
+        input->vtable->stop(input);
+      }
     }
   }
 
