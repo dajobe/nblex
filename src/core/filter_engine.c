@@ -588,3 +588,100 @@ int nblex_filter_matches(const filter_t* filter, const nblex_event* event) {
 
     return evaluate_filter_node(filter->root, data);
 }
+
+/* Helper to check if a field is network-layer and extract BPF equivalent */
+static int extract_bpf_from_expr(const filter_expr_t* expr, char* bpf_buf, size_t buf_size) {
+    if (!expr || !expr->field || !bpf_buf) {
+        return 0;
+    }
+
+    /* Check if this is a network-layer field that can be pushed to BPF */
+    if (strcmp(expr->field, "network.dst_port") == 0) {
+        if (expr->op == FILTER_OP_EQ && (expr->value_type == JSON_INTEGER || expr->value_type == JSON_REAL)) {
+            int port = (expr->value_type == JSON_INTEGER) ? expr->value.int_val : (int)expr->value.float_val;
+            snprintf(bpf_buf, buf_size, "dst port %d", port);
+            return 1;
+        }
+    } else if (strcmp(expr->field, "network.src_port") == 0) {
+        if (expr->op == FILTER_OP_EQ && (expr->value_type == JSON_INTEGER || expr->value_type == JSON_REAL)) {
+            int port = (expr->value_type == JSON_INTEGER) ? expr->value.int_val : (int)expr->value.float_val;
+            snprintf(bpf_buf, buf_size, "src port %d", port);
+            return 1;
+        }
+    } else if (strcmp(expr->field, "network.protocol") == 0 && expr->value_type == JSON_STRING) {
+        if (expr->op == FILTER_OP_EQ) {
+            /* Convert protocol name to BPF syntax */
+            const char* proto = expr->value.string_val;
+            if (strcmp(proto, "tcp") == 0 || strcmp(proto, "udp") == 0 ||
+                strcmp(proto, "icmp") == 0) {
+                snprintf(bpf_buf, buf_size, "%s", proto);
+                return 1;
+            }
+        }
+    } else if (strcmp(expr->field, "network.src_ip") == 0 && expr->value_type == JSON_STRING) {
+        if (expr->op == FILTER_OP_EQ) {
+            snprintf(bpf_buf, buf_size, "src host %s", expr->value.string_val);
+            return 1;
+        }
+    } else if (strcmp(expr->field, "network.dst_ip") == 0 && expr->value_type == JSON_STRING) {
+        if (expr->op == FILTER_OP_EQ) {
+            snprintf(bpf_buf, buf_size, "dst host %s", expr->value.string_val);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+/* Recursively extract BPF filters from AST, combining with AND */
+static void extract_bpf_recursive(const filter_node_t* node, char* bpf_buf, size_t buf_size, int* has_content) {
+    if (!node) {
+        return;
+    }
+
+    char temp_buf[512];
+
+    switch (node->type) {
+        case FILTER_NODE_AND:
+            /* For AND nodes, we can combine BPF predicates */
+            extract_bpf_recursive(node->data.binary.left, bpf_buf, buf_size, has_content);
+            extract_bpf_recursive(node->data.binary.right, bpf_buf, buf_size, has_content);
+            break;
+
+        case FILTER_NODE_OR:
+        case FILTER_NODE_NOT:
+            /* OR and NOT are harder to push down safely, skip for now */
+            break;
+
+        case FILTER_NODE_EXPR:
+            if (extract_bpf_from_expr(node->data.expr, temp_buf, sizeof(temp_buf))) {
+                if (*has_content) {
+                    /* Add AND between predicates */
+                    size_t current_len = strlen(bpf_buf);
+                    snprintf(bpf_buf + current_len, buf_size - current_len, " and %s", temp_buf);
+                } else {
+                    snprintf(bpf_buf, buf_size, "%s", temp_buf);
+                    *has_content = 1;
+                }
+            }
+            break;
+    }
+}
+
+/* Extract BPF filter from nblex filter (partial pushdown) */
+char* nblex_filter_to_bpf(const filter_t* filter) {
+    if (!filter || !filter->root) {
+        return NULL;
+    }
+
+    char bpf_buf[1024] = {0};
+    int has_content = 0;
+
+    extract_bpf_recursive(filter->root, bpf_buf, sizeof(bpf_buf), &has_content);
+
+    if (has_content) {
+        return strdup(bpf_buf);
+    }
+
+    return NULL;
+}

@@ -267,12 +267,34 @@ static int pcap_input_start(nblex_input* input) {
 
     /* Compile and set filter if provided */
     if (input->filter) {
-        /* Note: input->filter comes from nblex_input_set_filter() which stores
-         * the filter expression in the input base structure */
-        /* Extract filter string - assuming it's already parsed from filter_t */
-        /* For now, skip BPF filter as it needs integration with filter_engine */
-        /* TODO: Convert nblex filter expressions to BPF */
-        (void)input->filter; /* Suppress unused variable warning */
+        /* Try to extract BPF-compatible predicates from nblex filter */
+        char* bpf_filter = nblex_filter_to_bpf(input->filter);
+
+        if (bpf_filter) {
+            struct bpf_program fp;
+
+            /* Compile the BPF filter */
+            if (pcap_compile(data->pcap_handle, &fp, bpf_filter, 1, net) == -1) {
+                fprintf(stderr, "Warning: Failed to compile BPF filter '%s': %s\n",
+                       bpf_filter, pcap_geterr(data->pcap_handle));
+                fprintf(stderr, "Continuing without BPF optimization\n");
+            } else {
+                /* Apply the BPF filter */
+                if (pcap_setfilter(data->pcap_handle, &fp) == -1) {
+                    fprintf(stderr, "Warning: Failed to set BPF filter '%s': %s\n",
+                           bpf_filter, pcap_geterr(data->pcap_handle));
+                    fprintf(stderr, "Continuing without BPF optimization\n");
+                } else {
+                    fprintf(stderr, "Applied BPF filter: %s\n", bpf_filter);
+                }
+
+                /* Free the compiled filter program */
+                pcap_freecode(&fp);
+            }
+
+            free(bpf_filter);
+        }
+        /* Note: Full nblex filter will still be applied in userspace */
     }
 
     /* Get file descriptor for polling */

@@ -341,6 +341,7 @@ filter_t* nblex_filter_new(const char* expression);
 void nblex_filter_free(filter_t* filter);
 int nblex_filter_matches(const filter_t* filter, const nblex_event* event);
 filter_node_t* parse_filter_full(const char* expr);
+char* nblex_filter_to_bpf(const filter_t* filter);
 
 /* nQL parser */
 typedef struct nql_query_s nql_query_t;
